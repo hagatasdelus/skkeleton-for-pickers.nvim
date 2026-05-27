@@ -12,6 +12,7 @@ M.default_config = {
 M.config = {}
 local active_fts = {}
 local patched = false
+local picker_initialized = false
 
 --- Check whether the current line/query contains an active skkeleton conversion
 --- marker (▽ for henkan or ▼ for henkan-select), taking custom marker
@@ -41,6 +42,98 @@ local function has_skkeleton_marker()
         return false
     end
     return (line:find(marker_henkan, 1, true) ~= nil) or (line:find(marker_henkan_select, 1, true) ~= nil)
+end
+
+--- Call skkeleton handle by directly invoking denops#request with a crafted
+--- vimStatus, bypassing skkeleton#vim_status() which returns wrong mode/prevInput
+--- when called from mini.pick's normal-mode context.
+---
+--- ROOT CAUSE: skkeleton#vim_status() calls mode() → "n", then falls into the
+--- cmdline branch: getcmdline()[:getcmdpos()-2] → "".  The denops handler at
+---   main.ts:296  checks  `!prevInput.endsWith(context.toString())`
+--- and resets all internal state when it's true (empty string never ends with
+--- the preedit "▽…").  We fix this by providing prevInput = query_str, which
+--- ends with context.toString() because we synced the query after each handle.
+--- @param func string  "handleKey", "enable", "disable", etc.
+--- @param opts table   { key = ..., expr = ..., ["function"] = ... }
+--- @return string|nil
+local function call_skk_handle(func, opts)
+    -- Build prevInput from the current mini.pick query
+    local query_str = ""
+    local ok_pick, pick_active = pcall(function()
+        return MiniPick and MiniPick.is_picker_active()
+    end)
+    if ok_pick and pick_active then
+        local query = MiniPick.get_picker_query()
+        query_str = table.concat(query)
+    end
+
+    -- Replicate key normalization from skkeleton#handle
+    local normalized_opts = vim.deepcopy(opts)
+    local key = normalized_opts.key
+    if type(key) == "string" then
+        -- Convert raw key to notation using skkeleton's lookup table
+        local ok_notation, notation_map = pcall(function()
+            return vim.g["skkeleton#notation#key_to_notation"]
+        end)
+        if ok_notation and notation_map and notation_map[key] then
+            normalized_opts.key = { notation_map[key] }
+        else
+            normalized_opts.key = { key }
+        end
+    elseif type(key) == "table" then
+        local ok_notation, notation_map = pcall(function()
+            return vim.g["skkeleton#notation#key_to_notation"]
+        end)
+        if ok_notation and notation_map then
+            for i, k in ipairs(key) do
+                if notation_map[k] then
+                    key[i] = notation_map[k]
+                end
+            end
+        end
+    else
+        normalized_opts.key = { "" }
+    end
+
+    -- Construct vimStatus with correct prevInput
+    local vim_status = {
+        prevInput = query_str,
+        completeInfo = { pum_visible = false, selected = -1 },
+        completeType = "native",
+        mode = "c",
+    }
+
+    -- Call denops directly
+    local ok_req, ret = pcall(vim.fn["denops#request"], "skkeleton", "handle", { func, normalized_opts, vim_status })
+
+    if ok_req and ret then
+        -- Update g:skkeleton#state (replicating skkeleton#handle line 209)
+        if ret.state then
+            vim.g["skkeleton#state"] = ret.state
+        end
+
+        local result = ret.result or ""
+
+        -- Handle <Cmd>...<CR> results (replicating skkeleton#handle lines 212-214)
+        if result:find("^<Cmd>") then
+            local cmd_body = result:sub(6)
+            result = vim.api.nvim_replace_termcodes("<Cmd>" .. cmd_body .. "<CR>", true, true, true)
+        end
+
+        -- Fire autocmds (replicating skkeleton#handle line 216)
+        pcall(vim.fn["skkeleton#doautocmd"])
+
+        if opts.expr then
+            return result
+        end
+
+        if result ~= "" then
+            vim.api.nvim_feedkeys(result, "nit", false)
+        end
+        return ""
+    end
+    return nil
 end
 
 --- Process the output of skkeleton#handle and update the mini.pick query buffer.
@@ -91,22 +184,26 @@ local function should_route_to_skk(char, toggle_raw)
     if char == toggle_raw then
         return true
     end
+    if char:byte(1) == 128 then
+        return false
+    end
     if char == "\x08" or char == "\x7f" then
         return true
     end
-    if char == "\r" or char == "\n" then
+
+    local has_marker = has_skkeleton_marker()
+    if has_marker then
+        -- Route almost all keys to skkeleton when converting
         return true
     end
-    if char == "\x1b" then
-        return true
+
+    -- If no marker, only route toggle key, backspace, and printable characters
+    if char == "\r" or char == "\n" or char == "\x1b" then
+        return false
     end
 
     -- If multi-byte (non-ASCII)
     if #char > 1 then
-        -- Skip keys starting with \x80 (arrow keys/function keys)
-        if char:byte(1) == 128 then
-            return false
-        end
         return true
     end
 
@@ -185,7 +282,7 @@ local function apply_default_mode(buf)
 
     local has_skk, is_enabled = pcall(vim.fn["skkeleton#is_enabled"])
     if has_skk and not is_enabled then
-        pcall(vim.fn["skkeleton#enable"])
+        pcall(vim.fn["skkeleton#handle"], "enable", {})
     end
     pcall(vim.fn["skkeleton#handle"], "handleKey", { key = { "" }, ["function"] = func })
 end
@@ -280,38 +377,12 @@ function M.setup(opts)
         end,
     })
 
-    -- Set up mini.pick autocommands for default mode and stop handling
-    vim.api.nvim_create_autocmd("User", {
-        pattern = "MiniPickStart",
-        group = group,
-        callback = function()
-            if M.config.mini_pick then
-                local default_mode = M.config.default_mode
-                if default_mode and default_mode ~= "eisu" then
-                    pcall(vim.fn["skkeleton#enable"])
-                    local mode_map = {
-                        henkan = "hirakana",
-                        zenkaku = "zenkaku",
-                        katakana = "katakana",
-                        hankata = "hankatakana",
-                        hankatakana = "hankatakana",
-                        abbrev = "abbrev",
-                        hira = "hirakana",
-                        kata = "katakana",
-                    }
-                    local func = mode_map[default_mode]
-                    if func then
-                        pcall(vim.fn["skkeleton#handle"], "handleKey", { key = { "" }, ["function"] = func })
-                    end
-                end
-            end
-        end,
-    })
-
+    -- Set up mini.pick autocommands for stop handling
     vim.api.nvim_create_autocmd("User", {
         pattern = "MiniPickStop",
         group = group,
         callback = function()
+            picker_initialized = false
             if M.config.mini_pick then
                 pcall(vim.fn["skkeleton#disable"])
             end
@@ -329,12 +400,42 @@ function M.setup(opts)
                 return char
             end
 
+            -- Normalize backspace key
+            if char == "\x7f" then
+                char = "\x08"
+            end
+
             local ok_pick, pick_active = pcall(function()
                 return MiniPick and MiniPick.is_picker_active()
             end)
             local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
 
             if ok_pick and pick_active then
+                -- Synchronous picker initialization on first getcharstr invocation
+                if not picker_initialized then
+                    picker_initialized = true
+                    local default_mode = M.config.default_mode
+                    if default_mode and default_mode ~= "eisu" then
+                        call_skk_handle("enable", {})
+                        local mode_map = {
+                            henkan = "hirakana",
+                            zenkaku = "zenkaku",
+                            katakana = "katakana",
+                            hankata = "hankatakana",
+                            hankatakana = "hankatakana",
+                            abbrev = "abbrev",
+                            hira = "hirakana",
+                            kata = "katakana",
+                        }
+                        local func = mode_map[default_mode]
+                        if func then
+                            call_skk_handle("handleKey", { key = { "" }, ["function"] = func })
+                        end
+                        -- Update skk_enabled state after enabling
+                        ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
+                    end
+                end
+
                 local toggle_raw = vim.api.nvim_replace_termcodes(M.config.toggle_key or "<C-j>", true, true, true)
 
                 if char == toggle_raw then
@@ -342,7 +443,7 @@ function M.setup(opts)
                         if skk_enabled then
                             pcall(vim.fn["skkeleton#disable"])
                         else
-                            pcall(vim.fn["skkeleton#enable"])
+                            call_skk_handle("enable", {})
                             local default_mode = M.config.default_mode
                             if default_mode and default_mode ~= "eisu" then
                                 local mode_map = {
@@ -357,11 +458,7 @@ function M.setup(opts)
                                 }
                                 local func = mode_map[default_mode]
                                 if func then
-                                    pcall(
-                                        vim.fn["skkeleton#handle"],
-                                        "handleKey",
-                                        { key = { "" }, ["function"] = func }
-                                    )
+                                    call_skk_handle("handleKey", { key = { "" }, ["function"] = func })
                                 end
                             end
                         end
@@ -374,7 +471,7 @@ function M.setup(opts)
                         if char == "\r" or char == "\n" then
                             if has_skkeleton_marker() then
                                 local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
-                                local result = vim.fn["skkeleton#handle"]("handleKey", { key = nl, expr = true })
+                                local result = call_skk_handle("handleKey", { key = nl, expr = true })
                                 process_skk_result(result)
                                 return "\x1c"
                             else
@@ -383,9 +480,25 @@ function M.setup(opts)
                             end
                         end
 
-                        local result = vim.fn["skkeleton#handle"]("handleKey", { key = char, expr = true })
+                        if char == "\x1b" then
+                            if has_skkeleton_marker() then
+                                local result = call_skk_handle("handleKey", { key = char, expr = true })
+                                process_skk_result(result)
+                                return "\x1c"
+                            else
+                                pcall(vim.fn["skkeleton#disable"])
+                                return char
+                            end
+                        end
+
+                        local result = call_skk_handle("handleKey", { key = char, expr = true })
                         process_skk_result(result)
                         return "\x1c"
+                    else
+                        if char == "\x1b" or char == "\r" or char == "\n" then
+                            pcall(vim.fn["skkeleton#disable"])
+                        end
+                        return char
                     end
                 end
             end

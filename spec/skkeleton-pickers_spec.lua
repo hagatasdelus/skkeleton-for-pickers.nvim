@@ -29,11 +29,37 @@ end
 
 vim.fn["skkeleton#handle"] = function(func, opts)
     table.insert(mock.handle_calls, { func = func, opts = opts })
+    if func == "enable" then
+        mock.enabled_count = mock.enabled_count + 1
+        mock.is_enabled = true
+    elseif func == "disable" then
+        mock.disabled_count = mock.disabled_count + 1
+        mock.is_enabled = false
+    end
     return mock.handle_return
 end
 
 vim.fn["skkeleton#get_config"] = function()
     return mock.config
+end
+
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "handle" then
+        local func = args[1]
+        local opts = args[2]
+        table.insert(mock.handle_calls, { func = func, opts = opts })
+        if func == "enable" then
+            mock.enabled_count = mock.enabled_count + 1
+            mock.is_enabled = true
+        elseif func == "disable" then
+            mock.disabled_count = mock.disabled_count + 1
+            mock.is_enabled = false
+        end
+        return {
+            state = vim.g["skkeleton#state"],
+            result = mock.handle_return
+        }
+    end
 end
 
 local function reset_mock()
@@ -305,10 +331,11 @@ vim.api.nvim_set_current_buf(buf2)
 vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonPickers", buffer = buf2 })
 
 assert_eq(mock.enabled_count, 1, "Should automatically enable skkeleton")
-assert_eq(#mock.handle_calls, 1, "Should call skkeleton#handle to change mode")
-assert_eq(mock.handle_calls[1].func, "handleKey", "Should call handleKey")
-assert_eq(mock.handle_calls[1].opts.key[1], "", "Should send empty key array")
-assert_eq(mock.handle_calls[1].opts["function"], "zenkaku", "Should change to zenkaku mode")
+assert_eq(#mock.handle_calls, 2, "Should call skkeleton#handle to enable and then change mode")
+assert_eq(mock.handle_calls[1].func, "enable", "First call should be enable")
+assert_eq(mock.handle_calls[2].func, "handleKey", "Second call should be handleKey")
+assert_eq(mock.handle_calls[2].opts.key[1], "", "Should send empty key array")
+assert_eq(mock.handle_calls[2].opts["function"], "zenkaku", "Should change to zenkaku mode")
 
 -- Test 5: skkeleton-enable-post autocmd re-applies CR mapping
 print("Running Test 5: skkeleton-enable-post re-applies CR mapping...")
@@ -439,7 +466,7 @@ res = vim.fn.getcharstr()
 assert_eq(res, "\x1c", "Printable key should be intercepted and return ignore character")
 assert_eq(#mock.handle_calls, 1, "Should route key to skkeleton")
 assert_eq(mock.handle_calls[1].func, "handleKey", "Should handleKey")
-assert_eq(mock.handle_calls[1].opts.key, "a", "Should pass 'a' key")
+assert_eq(mock.handle_calls[1].opts.key[1], "a", "Should pass 'a' key")
 -- Check query was updated: "k" was popped, "か" was appended
 local q = _G.MiniPick.get_picker_query()
 assert_eq(#q, 1, "Query should have 1 character")
@@ -453,7 +480,7 @@ fed_char = "\r"
 res = vim.fn.getcharstr()
 assert_eq(res, "\x1c", "Enter with marker should confirm conversion and return ignore character")
 assert_eq(#mock.handle_calls, 1, "Should call handleKey")
-assert_eq(mock.handle_calls[1].opts.key, "\n", "Should pass NL key to confirm")
+assert_eq(mock.handle_calls[1].opts.key[1], "\n", "Should pass NL key to confirm")
 q = _G.MiniPick.get_picker_query()
 assert_eq(#q, 1, "Query should have 1 character")
 assert_eq(q[1], "か", "Query should have confirmed text without marker")
@@ -467,6 +494,89 @@ fed_char = "\r"
 res = vim.fn.getcharstr()
 assert_eq(res, "\r", "Enter without marker should return CR key to select file")
 assert_eq(mock.disabled_count, 1, "Should disable skkeleton")
+
+-- Case F: Backspace normalization (\x7f -> \x08 -> <bs>)
+mock.is_enabled = true
+mock.handle_calls = {}
+mock.handle_return = "\b"
+_G.MiniPick.active_picker.query = { "か" }
+fed_char = "\x7f"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Backspace key should be intercepted and return ignore character")
+assert_eq(#mock.handle_calls, 1, "Should route backspace to skkeleton")
+assert_eq(mock.handle_calls[1].opts.key[1], "\x08", "Should pass normalized backspace key")
+
+-- Case G: Esc with marker (should route to skkeleton)
+mock.is_enabled = true
+mock.handle_calls = {}
+mock.handle_return = "\b\bか"
+_G.MiniPick.active_picker.query = { "▽", "か" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Esc with marker should be intercepted and return ignore character")
+assert_eq(#mock.handle_calls, 1, "Should route Esc to skkeleton")
+assert_eq(mock.handle_calls[1].opts.key[1], "\x1b", "Should pass Esc key")
+
+-- Case H: Esc without marker (should disable skkeleton and return Esc)
+mock.is_enabled = true
+mock.handle_calls = {}
+mock.disabled_count = 0
+_G.MiniPick.active_picker.query = { "か" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1b", "Esc without marker should return Esc key to abort picker")
+assert_eq(mock.disabled_count, 1, "Should disable skkeleton")
+
+-- Case I: Ctrl-g with marker (should route to skkeleton)
+mock.is_enabled = true
+mock.handle_calls = {}
+mock.handle_return = "\b\b"
+_G.MiniPick.active_picker.query = { "▽", "か" }
+fed_char = "\x07"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Ctrl-g with marker should be intercepted and return ignore character")
+assert_eq(#mock.handle_calls, 1, "Should route Ctrl-g to skkeleton")
+assert_eq(mock.handle_calls[1].opts.key[1], "\x07", "Should pass Ctrl-g key")
+
+-- Case J: Ctrl-g without marker (should not route to skkeleton, should pass through)
+mock.is_enabled = true
+mock.handle_calls = {}
+_G.MiniPick.active_picker.query = { "か" }
+fed_char = "\x07"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x07", "Ctrl-g without marker should pass through directly")
+assert_eq(#mock.handle_calls, 0, "Should NOT route Ctrl-g to skkeleton when no marker")
+
+-- Case K: Stateful Initialization (default_mode != eisu)
+-- Simulate first getcharstr call after setup
+mock.is_enabled = false
+mock.enabled_count = 0
+mock.handle_calls = {}
+
+-- Re-setup with default_mode = henkan
+package.loaded["skkeleton-pickers"] = nil
+local picker_henkan = require("skkeleton-pickers")
+picker_henkan.setup({
+    mini_pick = true,
+    toggle_key = "<C-j>",
+    default_mode = "henkan",
+})
+
+_G.MiniPick.active_picker.query = { "a" }
+fed_char = "b" -- first user typed character
+
+res = vim.fn.getcharstr()
+-- The first call should have triggered:
+-- 1. call_skk_handle("enable", {})
+-- 2. call_skk_handle("handleKey", { key = {""}, function = "hirakana" })
+-- 3. Then processed the user typed character "b" (since skkeleton is now enabled, "b" is routed to skkeleton)
+assert_eq(res, "\x1c", "User typed key should be intercepted")
+assert_true(#mock.handle_calls >= 2, "Should initialize skkeleton and set mode on first getcharstr")
+-- First call should be enable
+assert_eq(mock.handle_calls[1].func, "enable", "Should call enable first")
+-- Second call should be setting default mode
+assert_eq(mock.handle_calls[2].func, "handleKey", "Should call handleKey for mode")
+assert_eq(mock.handle_calls[2].opts["function"], "hirakana", "Should set to hirakana")
 
 -- Restore original getcharstr to clean up the test environment
 vim.fn.getcharstr = orig_fn_getcharstr

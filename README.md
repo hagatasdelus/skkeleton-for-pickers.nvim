@@ -17,17 +17,15 @@
 
 ## ⚠️ Supported Fuzzy Finders
 
-現在、本プラグインが公式にサポートしている Fuzzy Finder は**以下の2種類**です。
+現在、本プラグインが公式にサポートしている Fuzzy Finder は**以下の3種類**です。
 
 1. **Telescope** (`nvim-telescope/telescope.nvim`)
 2. **Snacks.picker** (`folke/snacks.nvim`)
+3. **mini.pick** (`echasnovski/mini.nvim`)
 
-### ⚠️ mini.pick についての制限事項
-`mini.pick` (`echasnovski/mini.nvim`) は**サポート対象外**です。
-
-`mini.pick` はその入力ループ処理において、Neovimのインサートモードのキーマッピングをバイパスし、低レベルな `vim.fn.getcharstr()` を用いて入力文字を直接傍受（インターセプト）する設計となっています。
-一方、`skkeleton` はインサートモードのバッファローカルなキーマッピング (`inoremap`) を用いてキー入力をフックして変換を行う仕組みです。
-そのため、`mini.pick` のプロンプト内では `skkeleton` のキーマップが一切起動せず、日本語入力に切り替えることができません。これは `mini.pick` の設計に起因する制約であり、本プラグイン側での解決は不可能です。
+### 💡 mini.pick のサポートについて
+`mini.pick` はその入力ループ処理において、通常のインサートモードのキーマッピングをバイパスし、低レベルな `vim.fn.getcharstr()` を用いて入力文字を直接傍受する設計となっています。
+本プラグインでは、`vim.fn.getcharstr()` を動的にフック（monkeypatch）する手法を導入することで、`mini.pick` 起動中かつ skkeleton 有効化時のみキー入力を `skkeleton` 側にルーティングし、返ってきた確定/未確定テキストをピッカーのクエリ配列へとシームレスに同期しています。これにより、`mini.pick` でも完璧に日本語入力が可能になっています。
 
 ---
 
@@ -50,6 +48,7 @@
     -- 各種お使いのファインダー
     -- "nvim-telescope/telescope.nvim",
     -- "folke/snacks.nvim",
+    -- "echasnovski/mini.pick",
   },
   config = function()
     require("skkeleton-pickers").setup({
@@ -92,7 +91,7 @@ require("skkeleton-pickers").setup({
   -- 特定のピッカーでのみ有効化したい場合は false に設定可能 (デフォルトはすべて true)
   telescope = true,
   snacks = true,
-  mini_pick = false, -- (注: mini.pick は設計上の制限により非対応です)
+  mini_pick = true,
 
   -- 追加で有効にしたいカスタムバッファの filetype リスト
   filetypes = {},

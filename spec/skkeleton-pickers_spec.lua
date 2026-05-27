@@ -368,5 +368,109 @@ for _, m in ipairs(maps) do
 end
 assert_true(has_cr_map, "CR mapping should be re-applied after skkeleton-enable-post")
 
+-- Test 6: mini.pick integration via getcharstr monkeypatch
+print("Running Test 6: mini.pick integration via getcharstr monkeypatch...")
+reset_mock()
+
+-- Mock vim.fn.getcharstr BEFORE loading/setting up
+local fed_char = "a"
+local orig_fn_getcharstr = vim.fn.getcharstr
+vim.fn.getcharstr = function()
+    return fed_char
+end
+
+-- Clear package cache and reload
+package.loaded["skkeleton-pickers"] = nil
+local picker_new = require("skkeleton-pickers")
+
+-- Mock MiniPick global table
+_G.MiniPick = {
+    active_picker = {
+        query = { "a" },
+        caret = 2,
+    },
+    is_picker_active_val = true,
+}
+
+function _G.MiniPick.is_picker_active()
+    return _G.MiniPick.is_picker_active_val
+end
+
+function _G.MiniPick.get_picker_query()
+    return _G.MiniPick.active_picker.query
+end
+
+function _G.MiniPick.set_picker_query(query)
+    _G.MiniPick.active_picker.query = query
+    _G.MiniPick.active_picker.caret = #query + 1
+end
+
+-- Setup with mini.pick enabled
+picker_new.setup({
+    mini_pick = true,
+    toggle_key = "<C-j>",
+    default_mode = "eisu",
+})
+
+-- Case A: Skkeleton disabled, MiniPick active
+-- Typing "b" should pass through directly
+mock.is_enabled = false
+fed_char = "b"
+local res = vim.fn.getcharstr()
+assert_eq(res, "b", "Keys should pass through to mini.pick when skkeleton is disabled")
+
+-- Case B: Toggle key
+-- Typing toggle key (<C-j>) should enable skkeleton and return \x1c
+mock.is_enabled = false
+fed_char = "\n" -- toggle key is <C-j> (byte 10 / \n)
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Toggle key should be intercepted and return ignore character")
+assert_true(mock.is_enabled, "Skkeleton should be enabled after toggle keypress")
+
+-- Case C: Skkeleton enabled, printable key
+-- Mock skkeleton#handle to return "\bか"
+mock.is_enabled = true
+mock.handle_calls = {}
+mock.handle_return = "\bか"
+
+_G.MiniPick.active_picker.query = { "k" }
+fed_char = "a"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Printable key should be intercepted and return ignore character")
+assert_eq(#mock.handle_calls, 1, "Should route key to skkeleton")
+assert_eq(mock.handle_calls[1].func, "handleKey", "Should handleKey")
+assert_eq(mock.handle_calls[1].opts.key, "a", "Should pass 'a' key")
+-- Check query was updated: "k" was popped, "か" was appended
+local q = _G.MiniPick.get_picker_query()
+assert_eq(#q, 1, "Query should have 1 character")
+assert_eq(q[1], "か", "Query should be updated with Japanese character")
+
+-- Case D: Skkeleton enabled, Enter key with marker
+_G.MiniPick.active_picker.query = { "▽", "か" }
+mock.handle_calls = {}
+mock.handle_return = "\b\bか" -- remove ▽か, insert か
+fed_char = "\r"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Enter with marker should confirm conversion and return ignore character")
+assert_eq(#mock.handle_calls, 1, "Should call handleKey")
+assert_eq(mock.handle_calls[1].opts.key, "\n", "Should pass NL key to confirm")
+q = _G.MiniPick.get_picker_query()
+assert_eq(#q, 1, "Query should have 1 character")
+assert_eq(q[1], "か", "Query should have confirmed text without marker")
+
+-- Case E: Skkeleton enabled, Enter key without marker
+-- Since query is {"か"} (no marker), it should disable skkeleton and return "\r"
+_G.MiniPick.active_picker.query = { "か" }
+mock.handle_calls = {}
+mock.disabled_count = 0
+fed_char = "\r"
+res = vim.fn.getcharstr()
+assert_eq(res, "\r", "Enter without marker should return CR key to select file")
+assert_eq(mock.disabled_count, 1, "Should disable skkeleton")
+
+-- Restore original getcharstr to clean up the test environment
+vim.fn.getcharstr = orig_fn_getcharstr
+_G.MiniPick = nil
+
 print("All tests passed successfully!")
 os.exit(0)

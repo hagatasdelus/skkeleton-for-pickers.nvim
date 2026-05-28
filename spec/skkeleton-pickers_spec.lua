@@ -57,7 +57,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
         end
         return {
             state = vim.g["skkeleton#state"],
-            result = mock.handle_return
+            result = mock.handle_return,
         }
     end
 end
@@ -417,7 +417,17 @@ _G.MiniPick = {
         caret = 2,
     },
     is_picker_active_val = true,
+    default_match_opts = nil,
 }
+
+function _G.MiniPick.default_match(stritems, inds, query, opts)
+    _G.MiniPick.default_match_opts = opts
+    return inds
+end
+
+function _G.MiniPick.get_picker_items()
+    return {}
+end
 
 function _G.MiniPick.is_picker_active()
     return _G.MiniPick.is_picker_active_val
@@ -430,6 +440,7 @@ end
 function _G.MiniPick.set_picker_query(query)
     _G.MiniPick.active_picker.query = query
     _G.MiniPick.active_picker.caret = #query + 1
+    _G.MiniPick.default_match({}, {}, query, {})
 end
 
 -- Setup with mini.pick enabled
@@ -471,6 +482,8 @@ assert_eq(mock.handle_calls[1].opts.key[1], "a", "Should pass 'a' key")
 local q = _G.MiniPick.get_picker_query()
 assert_eq(#q, 1, "Query should have 1 character")
 assert_eq(q[1], "か", "Query should be updated with Japanese character")
+assert_true(_G.MiniPick.default_match_opts ~= nil, "Should have called default_match")
+assert_true(_G.MiniPick.default_match_opts.sync == true, "Should have forced opts.sync = true")
 
 -- Case D: Skkeleton enabled, Enter key with marker
 _G.MiniPick.active_picker.query = { "▽", "か" }

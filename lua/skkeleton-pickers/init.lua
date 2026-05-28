@@ -13,6 +13,7 @@ M.config = {}
 local active_fts = {}
 local patched = false
 local picker_initialized = false
+local is_routing_skk = false
 
 --- Check whether the current line/query contains an active skkeleton conversion
 --- marker (▽ for henkan or ▼ for henkan-select), taking custom marker
@@ -174,6 +175,8 @@ local function process_skk_result(result)
     end
 
     MiniPick.set_picker_query(query)
+    -- Flush event loop to allow any scheduled/deferred callbacks (such as asynchronous match coroutines) to execute
+    pcall(vim.wait, 1, function() return false end)
 end
 
 --- Determine whether a keypress should be routed to skkeleton inside mini.pick.
@@ -411,11 +414,25 @@ function M.setup(opts)
             local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
 
             if ok_pick and pick_active then
+                -- Wrap default_match to support synchronous matching when routing skkeleton keys
+                if MiniPick and not MiniPick.skkeleton_pickers_wrapped then
+                    MiniPick.skkeleton_pickers_wrapped = true
+                    local orig_default_match = MiniPick.default_match
+                    MiniPick.default_match = function(stritems, inds, query, opts)
+                        if is_routing_skk then
+                            opts = opts or {}
+                            opts.sync = true
+                        end
+                        return orig_default_match(stritems, inds, query, opts)
+                    end
+                end
+
                 -- Synchronous picker initialization on first getcharstr invocation
                 if not picker_initialized then
                     picker_initialized = true
                     local default_mode = M.config.default_mode
                     if default_mode and default_mode ~= "eisu" then
+                        is_routing_skk = true
                         call_skk_handle("enable", {})
                         local mode_map = {
                             henkan = "hirakana",
@@ -433,6 +450,7 @@ function M.setup(opts)
                         end
                         -- Update skk_enabled state after enabling
                         ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
+                        is_routing_skk = false
                     end
                 end
 
@@ -443,6 +461,7 @@ function M.setup(opts)
                         if skk_enabled then
                             pcall(vim.fn["skkeleton#disable"])
                         else
+                            is_routing_skk = true
                             call_skk_handle("enable", {})
                             local default_mode = M.config.default_mode
                             if default_mode and default_mode ~= "eisu" then
@@ -461,6 +480,7 @@ function M.setup(opts)
                                     call_skk_handle("handleKey", { key = { "" }, ["function"] = func })
                                 end
                             end
+                            is_routing_skk = false
                         end
                     end
                     return "\x1c"
@@ -468,14 +488,17 @@ function M.setup(opts)
 
                 if ok_skk and skk_enabled and char ~= "" and char ~= nil then
                     if should_route_to_skk(char, toggle_raw) then
+                        is_routing_skk = true
                         if char == "\r" or char == "\n" then
                             if has_skkeleton_marker() then
                                 local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
                                 local result = call_skk_handle("handleKey", { key = nl, expr = true })
                                 process_skk_result(result)
+                                is_routing_skk = false
                                 return "\x1c"
                             else
                                 pcall(vim.fn["skkeleton#disable"])
+                                is_routing_skk = false
                                 return char
                             end
                         end
@@ -484,15 +507,18 @@ function M.setup(opts)
                             if has_skkeleton_marker() then
                                 local result = call_skk_handle("handleKey", { key = char, expr = true })
                                 process_skk_result(result)
+                                is_routing_skk = false
                                 return "\x1c"
                             else
                                 pcall(vim.fn["skkeleton#disable"])
+                                is_routing_skk = false
                                 return char
                             end
                         end
 
                         local result = call_skk_handle("handleKey", { key = char, expr = true })
                         process_skk_result(result)
+                        is_routing_skk = false
                         return "\x1c"
                     else
                         if char == "\x1b" or char == "\r" or char == "\n" then

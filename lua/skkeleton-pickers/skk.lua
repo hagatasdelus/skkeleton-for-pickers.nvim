@@ -1,0 +1,110 @@
+local M = {}
+
+local config = require("skkeleton-pickers.config")
+
+function M.has_skkeleton_marker()
+    local marker_henkan = "▽"
+    local marker_henkan_select = "▼"
+    local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
+    if ok_config and type(cfg) == "table" then
+        marker_henkan = cfg.markerHenkan or marker_henkan
+        marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
+    end
+
+    -- If mini.pick is active, check the picker query
+    local ok_pick, pick_active = pcall(function()
+        return MiniPick and MiniPick.is_picker_active()
+    end)
+    if ok_pick and pick_active then
+        local query = MiniPick.get_picker_query()
+        local query_str = table.concat(query)
+        return (query_str:find(marker_henkan, 1, true) ~= nil) or (query_str:find(marker_henkan_select, 1, true) ~= nil)
+    end
+
+    local ok_line, line = pcall(vim.api.nvim_get_current_line)
+    if not ok_line or not line then
+        return false
+    end
+    return (line:find(marker_henkan, 1, true) ~= nil) or (line:find(marker_henkan_select, 1, true) ~= nil)
+end
+
+function M.call_skk_handle(func, opts)
+    -- Build prevInput from the current mini.pick query
+    local query_str = ""
+    local ok_pick, pick_active = pcall(function()
+        return MiniPick and MiniPick.is_picker_active()
+    end)
+    if ok_pick and pick_active then
+        local query = MiniPick.get_picker_query()
+        query_str = table.concat(query)
+    end
+
+    -- Replicate key normalization from skkeleton#handle
+    local normalized_opts = vim.deepcopy(opts)
+    local key = normalized_opts.key
+    if type(key) == "string" then
+        -- Convert raw key to notation using skkeleton's lookup table
+        local ok_notation, notation_map = pcall(function()
+            return vim.g["skkeleton#notation#key_to_notation"]
+        end)
+        if ok_notation and notation_map and notation_map[key] then
+            normalized_opts.key = { notation_map[key] }
+        else
+            normalized_opts.key = { key }
+        end
+    elseif type(key) == "table" then
+        local ok_notation, notation_map = pcall(function()
+            return vim.g["skkeleton#notation#key_to_notation"]
+        end)
+        if ok_notation and notation_map then
+            for i, k in ipairs(key) do
+                if notation_map[k] then
+                    key[i] = notation_map[k]
+                end
+            end
+        end
+    else
+        normalized_opts.key = { "" }
+    end
+
+    -- Construct vimStatus with correct prevInput
+    local vim_status = {
+        prevInput = query_str,
+        completeInfo = { pum_visible = false, selected = -1 },
+        completeType = "native",
+        mode = "t",
+    }
+
+    -- Call denops directly
+    local ok_req, ret = pcall(vim.fn["denops#request"], "skkeleton", "handle", { func, normalized_opts, vim_status })
+
+    if ok_req and ret then
+        -- Update g:skkeleton#state
+        if ret.state then
+            vim.g["skkeleton#state"] = ret.state
+        end
+
+        local result = ret.result or ""
+
+        -- Handle <Cmd>...<CR> results
+        if result:find("^<Cmd>") then
+            local cmd_body = result:sub(6)
+            result = vim.api.nvim_replace_termcodes("<Cmd>" .. cmd_body .. "<CR>", true, true, true)
+        end
+
+        -- Fire autocmds
+        pcall(vim.fn["skkeleton#doautocmd"])
+
+        if opts.expr then
+            return result
+        end
+
+        if result ~= "" then
+            vim.api.nvim_feedkeys(result, "nit", false)
+        end
+        return ""
+    end
+    return nil
+end
+
+return M

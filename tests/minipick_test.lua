@@ -322,6 +322,40 @@ for _, m in ipairs(toggle_maps) do
 end
 assert_true(not found_custom_toggle, "Toggle key should not be mapped locally when skkeleton is enabled")
 
+-- Case N: process_skk_result duplicate key elimination during preedit transition
+-- When result contains "k" and getPreEdit returns "▽k", it must not duplicate "k" in the query
+_G.MiniPick = {
+    active_picker = {
+        query = {},
+        caret = 1,
+    },
+    is_picker_active_val = true,
+    default_match_opts = nil,
+}
+function _G.MiniPick.default_match() end
+function _G.MiniPick.get_picker_query() return _G.MiniPick.active_picker.query end
+function _G.MiniPick.is_picker_active() return _G.MiniPick.is_picker_active_val end
+function _G.MiniPick.set_picker_query(query)
+    _G.MiniPick.active_picker.query = query
+end
+
+-- Mock denops#request to return "▽k" for getPreEdit
+local orig_denops_request = vim.fn["denops#request"]
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return "▽k"
+    end
+    return orig_denops_request(plugin, method, args)
+end
+
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("k")
+local q_case_n = _G.MiniPick.get_picker_query()
+assert_eq(#q_case_n, 2, "Query should have 2 characters ('▽', 'k')")
+assert_eq(q_case_n[1], "▽", "First char should be '▽'")
+assert_eq(q_case_n[2], "k", "Second char should be 'k'")
+
+vim.fn["denops#request"] = orig_denops_request
+
 vim.fn.getcharstr = orig_fn_getcharstr
 _G.MiniPick = nil
 

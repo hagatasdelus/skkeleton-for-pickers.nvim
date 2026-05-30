@@ -21,7 +21,7 @@ function M.process_skk_result(result)
 
     local query = MiniPick.get_picker_query()
 
-    -- Detect if there was any active preedit marker in the query beforehand
+    -- 1. Get the config markers
     local marker_henkan = "▽"
     local marker_henkan_select = "▼"
     local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
@@ -30,6 +30,7 @@ function M.process_skk_result(result)
         marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
     end
 
+    -- Detect if there was any active preedit marker in the query beforehand
     local had_marker = false
     for _, char in ipairs(query) do
         if char == marker_henkan or char == marker_henkan_select then
@@ -38,7 +39,7 @@ function M.process_skk_result(result)
         end
     end
 
-    -- 1. Extract the confirmed part by stripping any active preedit marker (▽ or ▼)
+    -- 2. Extract the confirmed part by stripping any active preedit marker (▽ or ▼)
     --    and everything after it before we process the result.
     local truncate_idx = nil
     for i, char in ipairs(query) do
@@ -53,30 +54,22 @@ function M.process_skk_result(result)
         end
     end
 
-    -- 2. Apply difference from result if it is not empty
-    if result and result ~= "" then
-        -- Strip any preedit (marker and everything after it) from the result to avoid duplication
-        local stripped_result = result
-        local idx1 = result:find(marker_henkan, 1, true)
-        local idx2 = result:find(marker_henkan_select, 1, true)
-        local idx = nil
-        if idx1 and idx2 then
-            idx = math.min(idx1, idx2)
-        else
-            idx = idx1 or idx2
-        end
-        if idx then
-            stripped_result = result:sub(1, idx - 1)
-        end
+    -- 3. Get the latest preedit string directly from skkeleton
+    local preedit = ""
+    local ok_preedit, preedit_res = pcall(vim.fn["denops#request"], "skkeleton", "getPreEdit", {})
+    if ok_preedit and type(preedit_res) == "string" then
+        preedit = preedit_res
+    end
 
-        -- Count backspaces at the start of the stripped result
+    -- 4. Apply difference from result if it is not empty
+    if result and result ~= "" then
+        -- Count backspaces at the start of the result to handle backspaces sent to the query
         local bs_count = 0
-        while stripped_result:sub(bs_count + 1, bs_count + 1) == "\8" do
+        while result:sub(bs_count + 1, bs_count + 1) == "\8" do
             bs_count = bs_count + 1
         end
 
-        -- If we had a marker, we completely ignore any leading backspaces in the result
-        -- for deleting from the query because the preedit is already gone.
+        -- If we didn't have a marker, apply backspaces to the confirmed query (e.g. Backspace on confirmed text)
         local delete_count = had_marker and 0 or bs_count
         for _ = 1, delete_count do
             if #query > 0 then
@@ -84,8 +77,42 @@ function M.process_skk_result(result)
             end
         end
 
-        -- Append the new characters, filtering out non-printable control characters
-        local new_text = stripped_result:sub(bs_count + 1)
+        -- Extract stripped_result (result without leading backspaces)
+        local stripped_result = result:sub(bs_count + 1)
+
+        -- Determine the clean confirmed text (new_text) from stripped_result and preedit
+        local new_text = ""
+        if preedit ~= "" then
+            if #stripped_result > 0 then
+                if #stripped_result > #preedit and stripped_result:sub(-#preedit) == preedit then
+                    -- Case: stripped_result is [confirmed_text] + [preedit]
+                    new_text = stripped_result:sub(1, #stripped_result - #preedit)
+                elseif preedit:sub(-#stripped_result) == stripped_result then
+                    -- Case: stripped_result is a suffix (or part) of preedit, meaning no new confirmed text
+                    new_text = ""
+                else
+                    -- Fallback: if they don't match, try to strip any preedit marker from stripped_result
+                    local idx1 = stripped_result:find(marker_henkan, 1, true)
+                    local idx2 = stripped_result:find(marker_henkan_select, 1, true)
+                    local idx = nil
+                    if idx1 and idx2 then
+                        idx = math.min(idx1, idx2)
+                    else
+                        idx = idx1 or idx2
+                    end
+                    if idx then
+                        new_text = stripped_result:sub(1, idx - 1)
+                    else
+                        new_text = stripped_result
+                    end
+                end
+            end
+        else
+            -- If preedit is empty, then all of stripped_result is confirmed text
+            new_text = stripped_result
+        end
+
+        -- Append the new confirmed characters, filtering out non-printable control characters
         if new_text ~= "" then
             for char in new_text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
                 local byte = char:byte(1)
@@ -97,14 +124,7 @@ function M.process_skk_result(result)
         end
     end
 
-    -- 3. Get the latest preedit string directly from skkeleton
-    local preedit = ""
-    local ok_preedit, preedit_res = pcall(vim.fn["denops#request"], "skkeleton", "getPreEdit", {})
-    if ok_preedit and type(preedit_res) == "string" then
-        preedit = preedit_res
-    end
-
-    -- 4. Append the characters of the preedit to the query
+    -- 5. Append the characters of the preedit to the query
     if preedit ~= "" then
         for char in preedit:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
             table.insert(query, char)

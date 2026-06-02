@@ -182,7 +182,8 @@ function M.setup_getcharstr_patch()
                 MiniPick.skkeleton_pickers_wrapped = true
                 local orig_default_match = MiniPick.default_match
                 MiniPick.default_match = function(stritems, inds, query, opts)
-                    if M.is_routing_skk then
+                    local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
+                    if ok_s and skk_e then
                         opts = opts or {}
                         opts.sync = true
                     end

@@ -52,6 +52,7 @@ function M.setup(opts)
         group = group,
         callback = function()
             minipick.picker_initialized = false
+            minipick.prev_preedit = ""
             if M.config.mini_pick then
                 pcall(vim.fn["skkeleton#disable"])
             end

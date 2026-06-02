@@ -77,6 +77,12 @@ function M.setup_buffer()
         return
     end
 
+    -- Skip setup for mini.pick prompt buffer since it does not use insert-mode mappings
+    -- and we handle its initialization dynamically in the getcharstr patch.
+    if ft == "minipick" then
+        return
+    end
+
     vim.b[buf].skkeleton = true
 
     -- Bind toggle key to <Plug>(skkeleton-toggle) in the prompt buffer if skkeleton is not active

@@ -273,7 +273,7 @@ assert_eq(mock.handle_calls[2].func, "handleKey", "Should call handleKey for mod
 assert_eq(mock.handle_calls[2].opts["function"], "hirakana", "Should set to hirakana")
 
 -- Case L: process_skk_result backspace safety
--- When result contains \8 but preedits are manually stripped, it must NOT delete confirmed text
+-- When result contains \8 but preedit was active (▽u), backspaces erase old preedit, not confirmed text
 _G.MiniPick = {
     active_picker = {
         query = { "あ", "い", "▽", "u" },
@@ -292,7 +292,18 @@ end
 mock.preedit = ""
 -- Mock a backspace-led confirmed result
 picker_henkan.setup({ mini_pick = true })
+-- Set prev_preedit to the old preedit that backspaces target
+package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽u"
+-- Mock getPreEdit to return empty (conversion confirmed)
+local orig_denops_request_L = vim.fn["denops#request"]
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return ""
+    end
+    return orig_denops_request_L(plugin, method, args)
+end
 package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8\8う")
+vim.fn["denops#request"] = orig_denops_request_L
 local final_q = _G.MiniPick.get_picker_query()
 assert_eq(#final_q, 3, "Query should have 3 characters ('あ', 'い', 'う')")
 assert_eq(final_q[1], "あ", "First char should be 'あ'")
@@ -323,7 +334,7 @@ end
 assert_true(not found_custom_toggle, "Toggle key should not be mapped locally when skkeleton is enabled")
 
 -- Case N: process_skk_result duplicate key elimination during preedit transition
--- When result contains "k" and getPreEdit returns "▽k", it must not duplicate "k" in the query
+-- When result contains "▽k" and getPreEdit returns "▽k", it must not duplicate "k" in the query
 _G.MiniPick = {
     active_picker = {
         query = {},
@@ -339,6 +350,9 @@ function _G.MiniPick.set_picker_query(query)
     _G.MiniPick.active_picker.query = query
 end
 
+-- Reset prev_preedit to empty (first key press, no prior preedit)
+package.loaded["skkeleton-pickers.minipick"].prev_preedit = ""
+
 -- Mock denops#request to return "▽k" for getPreEdit
 local orig_denops_request = vim.fn["denops#request"]
 vim.fn["denops#request"] = function(plugin, method, args)
@@ -348,11 +362,67 @@ vim.fn["denops#request"] = function(plugin, method, args)
     return orig_denops_request(plugin, method, args)
 end
 
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("k")
+-- result = "▽k" (from preEdit.output with #current="")
+-- getPreEdit() = "▽k"
+-- kakutei = "" (result == cur_preedit, no confirmed text)
+-- query = {} + preedit "▽k" = {"▽", "k"}
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("▽k")
 local q_case_n = _G.MiniPick.get_picker_query()
 assert_eq(#q_case_n, 2, "Query should have 2 characters ('▽', 'k')")
 assert_eq(q_case_n[1], "▽", "First char should be '▽'")
 assert_eq(q_case_n[2], "k", "Second char should be 'k'")
+
+-- Case O: Sequential preedit update (ki → き)
+-- Simulates typing 'i' after K (henkan_start), so preedit transitions from ▽k to ▽き
+_G.MiniPick.active_picker.query = { "▽", "k" }
+-- prev_preedit is "▽k" from Case N
+-- getPreEdit returns "▽き" now
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return "▽き"
+    end
+    return orig_denops_request(plugin, method, args)
+end
+-- result = "\b\b▽き" (2 BS to erase "▽k" segments, then new preedit)
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8\8▽き")
+local q_case_o = _G.MiniPick.get_picker_query()
+assert_eq(#q_case_o, 2, "Query should have 2 characters ('▽', 'き')")
+assert_eq(q_case_o[1], "▽", "First char should be '▽'")
+assert_eq(q_case_o[2], "き", "Second char should be 'き'")
+
+-- Case P: Henkan confirmation (▽き → 機)
+-- Simulates pressing space to confirm conversion
+_G.MiniPick.active_picker.query = { "▽", "き" }
+-- prev_preedit is "▽き" from Case O
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return ""  -- preedit is now empty (confirmed)
+    end
+    return orig_denops_request(plugin, method, args)
+end
+-- result = "\b\b機" (2 BS for "▽き" segments, then confirmed "機")
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8\8機")
+local q_case_p = _G.MiniPick.get_picker_query()
+assert_eq(#q_case_p, 1, "Query should have 1 character ('機')")
+assert_eq(q_case_p[1], "機", "First char should be '機'")
+
+-- Case Q: Consonant append during preedit (▽き → ▽きn)
+-- Simulates typing 'n' after '▽き', so preedit is "▽きn" and skkeleton returns "n"
+_G.MiniPick.active_picker.query = { "▽", "き" }
+package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽き"
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return "▽きn"
+    end
+    return orig_denops_request(plugin, method, args)
+end
+-- result = "n" (from preEdit.output where next starts with #current)
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("n")
+local q_case_q = _G.MiniPick.get_picker_query()
+assert_eq(#q_case_q, 3, "Query should have 3 characters ('▽', 'き', 'n')")
+assert_eq(q_case_q[1], "▽", "First char should be '▽'")
+assert_eq(q_case_q[2], "き", "Second char should be 'き'")
+assert_eq(q_case_q[3], "n", "Third char should be 'n'")
 
 vim.fn["denops#request"] = orig_denops_request
 

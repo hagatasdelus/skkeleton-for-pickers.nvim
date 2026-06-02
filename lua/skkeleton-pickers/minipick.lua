@@ -5,6 +5,8 @@ local skk = require("skkeleton-pickers.skk")
 
 M.picker_initialized = false
 M.is_routing_skk = false
+-- Track the previous preedit so we can compute kakutei (confirmed) text from the result delta
+M.prev_preedit = ""
 local patched = false
 
 function M.process_skk_result(result)
@@ -30,17 +32,7 @@ function M.process_skk_result(result)
         marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
     end
 
-    -- Detect if there was any active preedit marker in the query beforehand
-    local had_marker = false
-    for _, char in ipairs(query) do
-        if char == marker_henkan or char == marker_henkan_select then
-            had_marker = true
-            break
-        end
-    end
-
-    -- 2. Extract the confirmed part by stripping any active preedit marker (▽ or ▼)
-    --    and everything after it before we process the result.
+    -- 2. Strip old preedit from the query to get confirmed-only portion
     local truncate_idx = nil
     for i, char in ipairs(query) do
         if char == marker_henkan or char == marker_henkan_select then
@@ -54,69 +46,65 @@ function M.process_skk_result(result)
         end
     end
 
-    -- 3. Get the latest preedit string directly from skkeleton
-    local preedit = ""
+    -- 3. Get the current preedit from skkeleton (the authoritative source)
+    local cur_preedit = ""
     local ok_preedit, preedit_res = pcall(vim.fn["denops#request"], "skkeleton", "getPreEdit", {})
     if ok_preedit and type(preedit_res) == "string" then
-        preedit = preedit_res
+        cur_preedit = preedit_res
     end
 
-    -- 4. Apply difference from result if it is not empty
+    -- 4. Extract kakutei (confirmed) text from the result delta.
+    --    The result from preEdit.output(next) has the format:
+    --      BS * len(prev_preedit_segments) + kakutei + new_preedit
+    --    where BS erases the old preedit, kakutei is confirmed text, and new_preedit
+    --    is the current preedit state (same as getPreEdit()).
+    --    We extract kakutei by:
+    --      (a) stripping leading backspaces (they target the old preedit, not our query)
+    --      (b) stripping the trailing cur_preedit suffix (it will be re-appended from getPreEdit)
     if result and result ~= "" then
-        -- Count backspaces at the start of the result to handle backspaces sent to the query
+        -- Strip leading backspaces
         local bs_count = 0
         while result:sub(bs_count + 1, bs_count + 1) == "\8" do
             bs_count = bs_count + 1
         end
+        local after_bs = result:sub(bs_count + 1)
 
-        -- If we didn't have a marker, apply backspaces to the confirmed query (e.g. Backspace on confirmed text)
-        local delete_count = had_marker and 0 or bs_count
-        for _ = 1, delete_count do
-            if #query > 0 then
-                table.remove(query)
+        -- Extract kakutei by removing the trailing preedit
+        local kakutei = ""
+        if cur_preedit ~= "" and #after_bs > #cur_preedit and after_bs:sub(-#cur_preedit) == cur_preedit then
+            -- result = [kakutei][cur_preedit]
+            kakutei = after_bs:sub(1, #after_bs - #cur_preedit)
+        elseif cur_preedit == "" then
+            -- No active preedit; everything after backspaces is kakutei
+            kakutei = after_bs
+        elseif cur_preedit ~= "" and after_bs == cur_preedit then
+            -- No kakutei, result is entirely the new preedit
+            kakutei = ""
+        else
+            -- Fallback: result doesn't end with cur_preedit.
+            -- If cur_preedit is not empty, result only contains preedit delta, so no kakutei.
+            -- If cur_preedit is empty, then everything in result (after backspaces) is kakutei.
+            if cur_preedit ~= "" then
+                kakutei = ""
+            else
+                kakutei = after_bs
             end
         end
 
-        -- Extract stripped_result (result without leading backspaces)
-        local stripped_result = result:sub(bs_count + 1)
-
-        -- Determine the clean confirmed text (new_text) from stripped_result and preedit
-        local new_text = ""
-        if preedit ~= "" then
-            if #stripped_result > 0 then
-                if #stripped_result > #preedit and stripped_result:sub(-#preedit) == preedit then
-                    -- Case: stripped_result is [confirmed_text] + [preedit]
-                    new_text = stripped_result:sub(1, #stripped_result - #preedit)
-                elseif preedit:sub(-#stripped_result) == stripped_result then
-                    -- Case: stripped_result is a suffix (or part) of preedit, meaning no new confirmed text
-                    new_text = ""
-                else
-                    -- Fallback: if they don't match, try to strip any preedit marker from stripped_result
-                    local idx1 = stripped_result:find(marker_henkan, 1, true)
-                    local idx2 = stripped_result:find(marker_henkan_select, 1, true)
-                    local idx = nil
-                    if idx1 and idx2 then
-                        idx = math.min(idx1, idx2)
-                    else
-                        idx = idx1 or idx2
-                    end
-                    if idx then
-                        new_text = stripped_result:sub(1, idx - 1)
-                    else
-                        new_text = stripped_result
-                    end
+        -- If there was NO old preedit (prev_preedit was empty) and bs_count > 0,
+        -- the backspaces target confirmed text in the query (e.g., user pressed Backspace)
+        if M.prev_preedit == "" and bs_count > 0 then
+            for _ = 1, bs_count do
+                if #query > 0 then
+                    table.remove(query)
                 end
             end
-        else
-            -- If preedit is empty, then all of stripped_result is confirmed text
-            new_text = stripped_result
         end
 
-        -- Append the new confirmed characters, filtering out non-printable control characters
-        if new_text ~= "" then
-            for char in new_text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        -- Append kakutei characters, filtering out control characters
+        if kakutei ~= "" then
+            for char in kakutei:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
                 local byte = char:byte(1)
-                -- Skip single-byte control characters (0x00-0x1F and 0x7F)
                 if #char > 1 or (byte >= 32 and byte ~= 127) then
                     table.insert(query, char)
                 end
@@ -124,18 +112,17 @@ function M.process_skk_result(result)
         end
     end
 
-    -- 5. Append the characters of the preedit to the query
-    if preedit ~= "" then
-        for char in preedit:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+    -- 5. Append the current preedit characters to the query
+    if cur_preedit ~= "" then
+        for char in cur_preedit:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
             table.insert(query, char)
         end
     end
 
+    -- 6. Update prev_preedit for the next call
+    M.prev_preedit = cur_preedit
+
     MiniPick.set_picker_query(query)
-    -- Flush event loop to allow any scheduled/deferred callbacks to execute
-    pcall(vim.wait, 1, function()
-        return false
-    end)
 end
 
 function M.should_route_to_skk(char, toggle_raw)
@@ -209,7 +196,7 @@ function M.setup_getcharstr_patch()
                 local default_mode = config.options.default_mode
                 if default_mode and default_mode ~= "eisu" then
                     M.is_routing_skk = true
-                    skk.call_skk_handle("enable", {})
+                    skk.call_skk_handle("enable", { expr = true })
                     local mode_map = {
                         henkan = "hirakana",
                         zenkaku = "zenkaku",
@@ -222,7 +209,7 @@ function M.setup_getcharstr_patch()
                     }
                     local func = mode_map[default_mode]
                     if func then
-                        skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func })
+                        skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
                     end
                     -- Update skk_enabled state after enabling
                     ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
@@ -238,7 +225,7 @@ function M.setup_getcharstr_patch()
                         pcall(vim.fn["skkeleton#disable"])
                     else
                         M.is_routing_skk = true
-                        skk.call_skk_handle("enable", {})
+                        skk.call_skk_handle("enable", { expr = true })
                         local default_mode = config.options.default_mode
                         if default_mode and default_mode ~= "eisu" then
                             local mode_map = {
@@ -253,7 +240,7 @@ function M.setup_getcharstr_patch()
                             }
                             local func = mode_map[default_mode]
                             if func then
-                                skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func })
+                                skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
                             end
                         end
                         M.is_routing_skk = false

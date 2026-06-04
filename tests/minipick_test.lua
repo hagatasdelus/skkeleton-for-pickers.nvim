@@ -424,6 +424,61 @@ assert_eq(q_case_q[1], "▽", "First char should be '▽'")
 assert_eq(q_case_q[2], "き", "Second char should be 'き'")
 assert_eq(q_case_q[3], "n", "Third char should be 'n'")
 
+-- Case R: Consonant input duplication (sora -> そら)
+-- Simulates sequential typing of s, o, r, a in direct mode (no marker).
+_G.MiniPick.active_picker.query = {}
+package.loaded["skkeleton-pickers.minipick"].prev_preedit = ""
+
+-- 1. Type 's' -> getPreEdit returns 's', result = 's'
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return "s"
+    end
+    return orig_denops_request(plugin, method, args)
+end
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("s")
+local q_r1 = _G.MiniPick.get_picker_query()
+assert_eq(#q_r1, 1, "Query should have 1 character after 's'")
+assert_eq(q_r1[1], "s", "Char should be 's'")
+
+-- 2. Type 'o' -> getPreEdit returns '', result = '\8そ'
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return ""
+    end
+    return orig_denops_request(plugin, method, args)
+end
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8そ")
+local q_r2 = _G.MiniPick.get_picker_query()
+assert_eq(#q_r2, 1, "Query should have 1 character after 'o'")
+assert_eq(q_r2[1], "そ", "Char should be 'そ'")
+
+-- 3. Type 'r' -> getPreEdit returns 'r', result = 'r'
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return "r"
+    end
+    return orig_denops_request(plugin, method, args)
+end
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("r")
+local q_r3 = _G.MiniPick.get_picker_query()
+assert_eq(#q_r3, 2, "Query should have 2 characters after 'r'")
+assert_eq(q_r3[1], "そ", "First char should be 'そ'")
+assert_eq(q_r3[2], "r", "Second char should be 'r'")
+
+-- 4. Type 'a' -> getPreEdit returns '', result = '\8ら'
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return ""
+    end
+    return orig_denops_request(plugin, method, args)
+end
+package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8ら")
+local q_r4 = _G.MiniPick.get_picker_query()
+assert_eq(#q_r4, 2, "Query should have 2 characters after 'a'")
+assert_eq(q_r4[1], "そ", "First char should be 'そ'")
+assert_eq(q_r4[2], "ら", "Second char should be 'ら'")
+
 vim.fn["denops#request"] = orig_denops_request
 
 vim.fn.getcharstr = orig_fn_getcharstr

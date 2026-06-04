@@ -1,3 +1,4 @@
+---@diagnostic disable: duplicate-set-field
 local M = {}
 
 local config = require("skkeleton-pickers.config")
@@ -5,10 +6,89 @@ local skk = require("skkeleton-pickers.skk")
 
 M.picker_initialized = false
 M.is_routing_skk = false
--- Track the previous preedit so we can compute kakutei (confirmed) text from the result delta
 M.prev_preedit = ""
 local patched = false
 
+-- Get the skkeleton configuration markers
+function M.get_skk_markers()
+    local marker_henkan = "▽"
+    local marker_henkan_select = "▼"
+    local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
+    if ok_config and type(cfg) == "table" then
+        marker_henkan = cfg.markerHenkan or marker_henkan
+        marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
+    end
+    return marker_henkan, marker_henkan_select
+end
+
+-- Remove the previous preedit from the query
+function M.remove_old_preedit(query, prev_preedit, marker_henkan, marker_henkan_select)
+    -- 1. Remove by character count of prev_preedit
+    if prev_preedit and prev_preedit ~= "" then
+        local char_count = vim.fn.strchars(prev_preedit)
+        for _ = 1, char_count do
+            if #query > 0 then
+                table.remove(query)
+            end
+        end
+    end
+
+    -- 2. Fallback: Strip using markers if they are still present in the query
+    local truncate_idx = nil
+    for i, char in ipairs(query) do
+        if char == marker_henkan or char == marker_henkan_select then
+            truncate_idx = i
+            break
+        end
+    end
+    if truncate_idx then
+        while #query >= truncate_idx do
+            table.remove(query)
+        end
+    end
+end
+
+-- Retrieve the current preedit string from skkeleton
+function M.get_current_preedit()
+    local cur_preedit = ""
+    local ok_preedit, preedit_res = pcall(vim.fn["denops#request"], "skkeleton", "getPreEdit", {})
+    if ok_preedit and type(preedit_res) == "string" then
+        cur_preedit = preedit_res
+    end
+    return cur_preedit
+end
+
+-- Parse result delta into leading backspace count and the text after it
+function M.parse_result_delta(result)
+    local bs_count = 0
+    if result then
+        while result:sub(bs_count + 1, bs_count + 1) == "\8" do
+            bs_count = bs_count + 1
+        end
+    end
+    local after_bs = result and result:sub(bs_count + 1) or ""
+    return bs_count, after_bs
+end
+
+-- Extract confirmed (kakutei) text from result delta
+function M.extract_kakutei(after_bs, cur_preedit)
+    if cur_preedit == "" then
+        return after_bs
+    end
+
+    if #after_bs > #cur_preedit and after_bs:sub(-#cur_preedit) == cur_preedit then
+        -- result = [kakutei][cur_preedit]
+        return after_bs:sub(1, #after_bs - #cur_preedit)
+    elseif after_bs == cur_preedit then
+        -- No kakutei, result is entirely the new preedit
+        return ""
+    else
+        -- Fallback
+        return ""
+    end
+end
+
+-- Process the skkeleton handleKey result and update mini.pick query
 function M.process_skk_result(result)
     if result == " \8" then
         return
@@ -22,77 +102,18 @@ function M.process_skk_result(result)
     end
 
     local query = MiniPick.get_picker_query()
+    local marker_henkan, marker_henkan_select = M.get_skk_markers()
 
-    -- 1. Get the config markers
-    local marker_henkan = "▽"
-    local marker_henkan_select = "▼"
-    local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
-    if ok_config and type(cfg) == "table" then
-        marker_henkan = cfg.markerHenkan or marker_henkan
-        marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
-    end
+    -- Remove the old preedit from query before processing the new result
+    M.remove_old_preedit(query, M.prev_preedit, marker_henkan, marker_henkan_select)
 
-    -- 2. Strip old preedit from the query to get confirmed-only portion
-    local truncate_idx = nil
-    for i, char in ipairs(query) do
-        if char == marker_henkan or char == marker_henkan_select then
-            truncate_idx = i
-            break
-        end
-    end
-    if truncate_idx then
-        while #query >= truncate_idx do
-            table.remove(query)
-        end
-    end
+    local cur_preedit = M.get_current_preedit()
 
-    -- 3. Get the current preedit from skkeleton (the authoritative source)
-    local cur_preedit = ""
-    local ok_preedit, preedit_res = pcall(vim.fn["denops#request"], "skkeleton", "getPreEdit", {})
-    if ok_preedit and type(preedit_res) == "string" then
-        cur_preedit = preedit_res
-    end
-
-    -- 4. Extract kakutei (confirmed) text from the result delta.
-    --    The result from preEdit.output(next) has the format:
-    --      BS * len(prev_preedit_segments) + kakutei + new_preedit
-    --    where BS erases the old preedit, kakutei is confirmed text, and new_preedit
-    --    is the current preedit state (same as getPreEdit()).
-    --    We extract kakutei by:
-    --      (a) stripping leading backspaces (they target the old preedit, not our query)
-    --      (b) stripping the trailing cur_preedit suffix (it will be re-appended from getPreEdit)
     if result and result ~= "" then
-        -- Strip leading backspaces
-        local bs_count = 0
-        while result:sub(bs_count + 1, bs_count + 1) == "\8" do
-            bs_count = bs_count + 1
-        end
-        local after_bs = result:sub(bs_count + 1)
+        local bs_count, after_bs = M.parse_result_delta(result)
+        local kakutei = M.extract_kakutei(after_bs, cur_preedit)
 
-        -- Extract kakutei by removing the trailing preedit
-        local kakutei = ""
-        if cur_preedit ~= "" and #after_bs > #cur_preedit and after_bs:sub(-#cur_preedit) == cur_preedit then
-            -- result = [kakutei][cur_preedit]
-            kakutei = after_bs:sub(1, #after_bs - #cur_preedit)
-        elseif cur_preedit == "" then
-            -- No active preedit; everything after backspaces is kakutei
-            kakutei = after_bs
-        elseif cur_preedit ~= "" and after_bs == cur_preedit then
-            -- No kakutei, result is entirely the new preedit
-            kakutei = ""
-        else
-            -- Fallback: result doesn't end with cur_preedit.
-            -- If cur_preedit is not empty, result only contains preedit delta, so no kakutei.
-            -- If cur_preedit is empty, then everything in result (after backspaces) is kakutei.
-            if cur_preedit ~= "" then
-                kakutei = ""
-            else
-                kakutei = after_bs
-            end
-        end
-
-        -- If there was NO old preedit (prev_preedit was empty) and bs_count > 0,
-        -- the backspaces target confirmed text in the query (e.g., user pressed Backspace)
+        -- If there was NO old preedit, apply backspaces to the confirmed query text
         if M.prev_preedit == "" and bs_count > 0 then
             for _ = 1, bs_count do
                 if #query > 0 then
@@ -101,7 +122,7 @@ function M.process_skk_result(result)
             end
         end
 
-        -- Append kakutei characters, filtering out control characters
+        -- Append kakutei characters
         if kakutei ~= "" then
             for char in kakutei:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
                 local byte = char:byte(1)
@@ -112,16 +133,14 @@ function M.process_skk_result(result)
         end
     end
 
-    -- 5. Append the current preedit characters to the query
+    -- Append current preedit characters
     if cur_preedit ~= "" then
         for char in cur_preedit:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
             table.insert(query, char)
         end
     end
 
-    -- 6. Update prev_preedit for the next call
     M.prev_preedit = cur_preedit
-
     MiniPick.set_picker_query(query)
 end
 
@@ -153,6 +172,104 @@ function M.should_route_to_skk(char, toggle_raw)
     return code and code >= 32 and code <= 126
 end
 
+-- Initialize default mode if not yet initialized
+function M.initialize_picker_mode()
+    if M.picker_initialized then
+        return
+    end
+    M.picker_initialized = true
+    local default_mode = config.options.default_mode
+    if default_mode and default_mode ~= "eisu" then
+        M.is_routing_skk = true
+        skk.call_skk_handle("enable", { expr = true })
+        local mode_map = {
+            henkan = "hirakana",
+            zenkaku = "zenkaku",
+            katakana = "katakana",
+            hankata = "hankatakana",
+            hankatakana = "hankatakana",
+            abbrev = "abbrev",
+            hira = "hirakana",
+            kata = "katakana",
+        }
+        local func = mode_map[default_mode]
+        if func then
+            skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
+        end
+        M.is_routing_skk = false
+    end
+end
+
+-- Process the toggle keypress to enable/disable skkeleton
+function M.handle_toggle_key(toggle_raw)
+    local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
+    if not ok_skk then
+        return "\x1c"
+    end
+
+    if skk_enabled then
+        pcall(vim.fn["skkeleton#disable"])
+    else
+        M.is_routing_skk = true
+        skk.call_skk_handle("enable", { expr = true })
+        local default_mode = config.options.default_mode
+        if default_mode and default_mode ~= "eisu" then
+            local mode_map = {
+                henkan = "hirakana",
+                zenkaku = "zenkaku",
+                katakana = "katakana",
+                hankata = "hankatakana",
+                hankatakana = "hankatakana",
+                abbrev = "abbrev",
+                hira = "hirakana",
+                kata = "katakana",
+            }
+            local func = mode_map[default_mode]
+            if func then
+                skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
+            end
+        end
+        M.is_routing_skk = false
+    end
+    return "\x1c"
+end
+
+-- Handle normal key routing to skkeleton
+function M.route_key_to_skk(char)
+    M.is_routing_skk = true
+    if char == "\r" or char == "\n" then
+        if skk.has_skkeleton_marker() then
+            local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
+            local result = skk.call_skk_handle("handleKey", { key = nl, expr = true })
+            M.process_skk_result(result)
+            M.is_routing_skk = false
+            return "\x1c"
+        else
+            pcall(vim.fn["skkeleton#disable"])
+            M.is_routing_skk = false
+            return char
+        end
+    end
+
+    if char == "\x1b" then
+        if skk.has_skkeleton_marker() then
+            local result = skk.call_skk_handle("handleKey", { key = char, expr = true })
+            M.process_skk_result(result)
+            M.is_routing_skk = false
+            return "\x1c"
+        else
+            pcall(vim.fn["skkeleton#disable"])
+            M.is_routing_skk = false
+            return char
+        end
+    end
+
+    local result = skk.call_skk_handle("handleKey", { key = char, expr = true })
+    M.process_skk_result(result)
+    M.is_routing_skk = false
+    return "\x1c"
+end
+
 function M.setup_getcharstr_patch()
     if patched then
         return
@@ -174,7 +291,6 @@ function M.setup_getcharstr_patch()
         local ok_pick, pick_active = pcall(function()
             return MiniPick and MiniPick.is_picker_active()
         end)
-        local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
 
         if ok_pick and pick_active then
             -- Wrap default_match to support synchronous matching when routing skkeleton keys
@@ -192,98 +308,20 @@ function M.setup_getcharstr_patch()
             end
 
             -- Synchronous picker initialization on first getcharstr invocation
-            if not M.picker_initialized then
-                M.picker_initialized = true
-                local default_mode = config.options.default_mode
-                if default_mode and default_mode ~= "eisu" then
-                    M.is_routing_skk = true
-                    skk.call_skk_handle("enable", { expr = true })
-                    local mode_map = {
-                        henkan = "hirakana",
-                        zenkaku = "zenkaku",
-                        katakana = "katakana",
-                        hankata = "hankatakana",
-                        hankatakana = "hankatakana",
-                        abbrev = "abbrev",
-                        hira = "hirakana",
-                        kata = "katakana",
-                    }
-                    local func = mode_map[default_mode]
-                    if func then
-                        skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
-                    end
-                    -- Update skk_enabled state after enabling
-                    ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
-                    M.is_routing_skk = false
-                end
-            end
+            M.initialize_picker_mode()
+
+            -- Re-evaluate skkeleton enablement state after potential initialization
+            local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
 
             local toggle_raw = vim.api.nvim_replace_termcodes(config.options.toggle_key or "<C-j>", true, true, true)
 
             if char == toggle_raw then
-                if ok_skk then
-                    if skk_enabled then
-                        pcall(vim.fn["skkeleton#disable"])
-                    else
-                        M.is_routing_skk = true
-                        skk.call_skk_handle("enable", { expr = true })
-                        local default_mode = config.options.default_mode
-                        if default_mode and default_mode ~= "eisu" then
-                            local mode_map = {
-                                henkan = "hirakana",
-                                zenkaku = "zenkaku",
-                                katakana = "katakana",
-                                hankata = "hankatakana",
-                                hankatakana = "hankatakana",
-                                abbrev = "abbrev",
-                                hira = "hirakana",
-                                kata = "katakana",
-                            }
-                            local func = mode_map[default_mode]
-                            if func then
-                                skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
-                            end
-                        end
-                        M.is_routing_skk = false
-                    end
-                end
-                return "\x1c"
+                return M.handle_toggle_key(toggle_raw)
             end
 
             if ok_skk and skk_enabled and char ~= "" and char ~= nil then
                 if M.should_route_to_skk(char, toggle_raw) then
-                    M.is_routing_skk = true
-                    if char == "\r" or char == "\n" then
-                        if skk.has_skkeleton_marker() then
-                            local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
-                            local result = skk.call_skk_handle("handleKey", { key = nl, expr = true })
-                            M.process_skk_result(result)
-                            M.is_routing_skk = false
-                            return "\x1c"
-                        else
-                            pcall(vim.fn["skkeleton#disable"])
-                            M.is_routing_skk = false
-                            return char
-                        end
-                    end
-
-                    if char == "\x1b" then
-                        if skk.has_skkeleton_marker() then
-                            local result = skk.call_skk_handle("handleKey", { key = char, expr = true })
-                            M.process_skk_result(result)
-                            M.is_routing_skk = false
-                            return "\x1c"
-                        else
-                            pcall(vim.fn["skkeleton#disable"])
-                            M.is_routing_skk = false
-                            return char
-                        end
-                    end
-
-                    local result = skk.call_skk_handle("handleKey", { key = char, expr = true })
-                    M.process_skk_result(result)
-                    M.is_routing_skk = false
-                    return "\x1c"
+                    return M.route_key_to_skk(char)
                 else
                     if char == "\x1b" or char == "\r" or char == "\n" then
                         pcall(vim.fn["skkeleton#disable"])

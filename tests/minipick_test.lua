@@ -109,6 +109,12 @@ vim.fn.getcharstr = function()
     return fed_char
 end
 
+vim.fn.getcharstr = orig_fn_getcharstr
+_G.skkeleton_pickers_minipick_patched = nil
+vim.fn.getcharstr = function()
+    return fed_char
+end
+
 package.loaded["skkeleton-pickers"] = nil
 package.loaded["skkeleton-pickers.config"] = nil
 package.loaded["skkeleton-pickers.buffer"] = nil
@@ -250,6 +256,12 @@ assert_eq(res, "\x07", "Ctrl-g without marker should pass through")
 mock.is_enabled = false
 mock.enabled_count = 0
 mock.handle_calls = {}
+
+vim.fn.getcharstr = orig_fn_getcharstr
+_G.skkeleton_pickers_minipick_patched = nil
+vim.fn.getcharstr = function()
+    return fed_char
+end
 
 package.loaded["skkeleton-pickers"] = nil
 package.loaded["skkeleton-pickers.config"] = nil
@@ -478,6 +490,36 @@ local q_r4 = _G.MiniPick.get_picker_query()
 assert_eq(#q_r4, 2, "Query should have 2 characters after 'a'")
 assert_eq(q_r4[1], "そ", "First char should be 'そ'")
 assert_eq(q_r4[2], "ら", "Second char should be 'ら'")
+
+-- Case S: Delete key handling (<Del> input on active preedit)
+mock.is_enabled = true
+mock.handle_calls = {}
+mock.handle_return = "\8\8\8\8\8▽からす"
+
+_G.MiniPick.active_picker.query = { "▽", "か", "ら", "す", "ま" }
+package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽からすま"
+
+local del_termcode = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
+fed_char = del_termcode
+
+-- Mock getPreEdit to return "▽からす"
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return "▽からす"
+    end
+    return orig_denops_request(plugin, method, args)
+end
+
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Delete key should be intercepted and routed")
+assert_eq(#mock.handle_calls, 1, "Should route to skkeleton")
+assert_eq(mock.handle_calls[1].func, "handleKey", "Should handleKey")
+assert_eq(mock.handle_calls[1].opts.key[1], "\x08", "Del key should be converted to BS when routed to skkeleton")
+
+local q_case_s = _G.MiniPick.get_picker_query()
+assert_eq(#q_case_s, 4, "Query should have 4 characters ('▽', 'か', 'ら', 'す')")
+assert_eq(q_case_s[1], "▽", "First char")
+assert_eq(q_case_s[4], "す", "Fourth char")
 
 vim.fn["denops#request"] = orig_denops_request
 

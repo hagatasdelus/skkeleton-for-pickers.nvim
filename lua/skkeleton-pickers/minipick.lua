@@ -145,6 +145,11 @@ function M.process_skk_result(result)
 end
 
 function M.should_route_to_skk(char, toggle_raw)
+    local del_termcode = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
+    if char == del_termcode then
+        return true
+    end
+
     if char:byte(1) == 128 then
         return false
     end
@@ -237,7 +242,15 @@ end
 -- Handle normal key routing to skkeleton
 function M.route_key_to_skk(char)
     M.is_routing_skk = true
-    if char == "\r" or char == "\n" then
+
+    -- Convert <Del> termcode to Backspace (\x08) when routing to skkeleton
+    local del_termcode = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
+    local routed_key = char
+    if char == del_termcode then
+        routed_key = "\x08"
+    end
+
+    if routed_key == "\r" or routed_key == "\n" then
         if skk.has_skkeleton_marker() then
             local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
             local result = skk.call_skk_handle("handleKey", { key = nl, expr = true })
@@ -251,7 +264,7 @@ function M.route_key_to_skk(char)
         end
     end
 
-    if char == "\x1b" then
+    if routed_key == "\x1b" then
         if skk.has_skkeleton_marker() then
             local result = skk.call_skk_handle("handleKey", { key = char, expr = true })
             M.process_skk_result(result)
@@ -264,17 +277,63 @@ function M.route_key_to_skk(char)
         end
     end
 
-    local result = skk.call_skk_handle("handleKey", { key = char, expr = true })
+    local result = skk.call_skk_handle("handleKey", { key = routed_key, expr = true })
     M.process_skk_result(result)
     M.is_routing_skk = false
     return "\x1c"
 end
 
+-- Wrap default_match to support synchronous matching when routing skkeleton keys
+function M.wrap_default_match()
+    if MiniPick and not MiniPick.skkeleton_pickers_wrapped then
+        MiniPick.skkeleton_pickers_wrapped = true
+        local orig_default_match = MiniPick.default_match
+        MiniPick.default_match = function(stritems, inds, query, opts)
+            local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
+            if ok_s and skk_e then
+                opts = opts or {}
+                opts.sync = true
+            end
+            return orig_default_match(stritems, inds, query, opts)
+        end
+    end
+end
+
+-- Process keypress logic for mini.pick and route to skkeleton if needed
+function M.handle_picker_char(char)
+    -- Wrap default_match to support synchronous matching when routing skkeleton keys
+    M.wrap_default_match()
+
+    -- Synchronous picker initialization on first getcharstr invocation
+    M.initialize_picker_mode()
+
+    -- Re-evaluate skkeleton enablement state after potential initialization
+    local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
+    local toggle_raw = vim.api.nvim_replace_termcodes(config.options.toggle_key or "<C-j>", true, true, true)
+
+    if char == toggle_raw then
+        return M.handle_toggle_key(toggle_raw)
+    end
+
+    if not (ok_skk and skk_enabled and char ~= "" and char ~= nil) then
+        return char
+    end
+
+    if M.should_route_to_skk(char, toggle_raw) then
+        return M.route_key_to_skk(char)
+    end
+
+    if char == "\x1b" or char == "\r" or char == "\n" then
+        pcall(vim.fn["skkeleton#disable"])
+    end
+    return char
+end
+
 function M.setup_getcharstr_patch()
-    if patched then
+    if _G.skkeleton_pickers_minipick_patched then
         return
     end
-    patched = true
+
     local orig_getcharstr = vim.fn.getcharstr
     vim.fn.getcharstr = function(...)
         local char = orig_getcharstr(...)
@@ -293,46 +352,13 @@ function M.setup_getcharstr_patch()
         end)
 
         if ok_pick and pick_active then
-            -- Wrap default_match to support synchronous matching when routing skkeleton keys
-            if MiniPick and not MiniPick.skkeleton_pickers_wrapped then
-                MiniPick.skkeleton_pickers_wrapped = true
-                local orig_default_match = MiniPick.default_match
-                MiniPick.default_match = function(stritems, inds, query, opts)
-                    local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
-                    if ok_s and skk_e then
-                        opts = opts or {}
-                        opts.sync = true
-                    end
-                    return orig_default_match(stritems, inds, query, opts)
-                end
-            end
-
-            -- Synchronous picker initialization on first getcharstr invocation
-            M.initialize_picker_mode()
-
-            -- Re-evaluate skkeleton enablement state after potential initialization
-            local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
-
-            local toggle_raw = vim.api.nvim_replace_termcodes(config.options.toggle_key or "<C-j>", true, true, true)
-
-            if char == toggle_raw then
-                return M.handle_toggle_key(toggle_raw)
-            end
-
-            if ok_skk and skk_enabled and char ~= "" and char ~= nil then
-                if M.should_route_to_skk(char, toggle_raw) then
-                    return M.route_key_to_skk(char)
-                else
-                    if char == "\x1b" or char == "\r" or char == "\n" then
-                        pcall(vim.fn["skkeleton#disable"])
-                    end
-                    return char
-                end
-            end
+            return M.handle_picker_char(char)
         end
 
         return char
     end
+
+    _G.skkeleton_pickers_minipick_patched = true
 end
 
 return M

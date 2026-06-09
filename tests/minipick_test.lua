@@ -521,6 +521,36 @@ assert_eq(#q_case_s, 4, "Query should have 4 characters ('▽', 'か', 'ら', '�
 assert_eq(q_case_s[1], "▽", "First char")
 assert_eq(q_case_s[4], "す", "Fourth char")
 
+-- Case T: Backspace key termcode handling (<BS> termcode input on active preedit)
+mock.is_enabled = true
+mock.handle_calls = {}
+mock.handle_return = "\8\8\8\8\8▽からす"
+
+_G.MiniPick.active_picker.query = { "▽", "か", "ら", "す", "ま" }
+package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽からすま"
+
+local bs_termcode = vim.api.nvim_replace_termcodes("<BS>", true, true, true)
+fed_char = bs_termcode
+
+-- Mock getPreEdit to return "▽からす"
+vim.fn["denops#request"] = function(plugin, method, args)
+    if plugin == "skkeleton" and method == "getPreEdit" then
+        return "▽からす"
+    end
+    return orig_denops_request(plugin, method, args)
+end
+
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Backspace termcode should be intercepted and routed")
+assert_eq(#mock.handle_calls, 1, "Should route to skkeleton")
+assert_eq(mock.handle_calls[1].func, "handleKey", "Should handleKey")
+assert_eq(mock.handle_calls[1].opts.key[1], "\x08", "BS termcode should be converted to ASCII BS when routed to skkeleton")
+
+local q_case_t = _G.MiniPick.get_picker_query()
+assert_eq(#q_case_t, 4, "Query should have 4 characters")
+assert_eq(q_case_t[1], "▽", "First char")
+assert_eq(q_case_t[4], "す", "Fourth char")
+
 vim.fn["denops#request"] = orig_denops_request
 
 vim.fn.getcharstr = orig_fn_getcharstr

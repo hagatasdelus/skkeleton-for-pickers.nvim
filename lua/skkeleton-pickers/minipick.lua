@@ -146,7 +146,9 @@ end
 
 function M.should_route_to_skk(char, toggle_raw)
     local del_termcode = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
-    if char == del_termcode then
+    local bs_termcode = vim.api.nvim_replace_termcodes("<BS>", true, true, true)
+    local bspace_termcode = vim.api.nvim_replace_termcodes("<Bspace>", true, true, true)
+    if char == del_termcode or char == bs_termcode or char == bspace_termcode then
         return true
     end
 
@@ -243,10 +245,12 @@ end
 function M.route_key_to_skk(char)
     M.is_routing_skk = true
 
-    -- Convert <Del> termcode to Backspace (\x08) when routing to skkeleton
+    -- Convert <Del> and <BS> termcodes to Backspace (\x08) when routing to skkeleton
     local del_termcode = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
+    local bs_termcode = vim.api.nvim_replace_termcodes("<BS>", true, true, true)
+    local bspace_termcode = vim.api.nvim_replace_termcodes("<Bspace>", true, true, true)
     local routed_key = char
-    if char == del_termcode then
+    if char == del_termcode or char == bs_termcode or char == bspace_termcode then
         routed_key = "\x08"
     end
 

@@ -21,6 +21,18 @@ function M.get_skk_markers()
     return marker_henkan, marker_henkan_select
 end
 
+-- Strip conversion markers (▽/▼) from the query array
+function M.clean_query_markers(query)
+    local marker_henkan, marker_henkan_select = M.get_skk_markers()
+    local clean_query = {}
+    for _, char in ipairs(query) do
+        if char ~= marker_henkan and char ~= marker_henkan_select then
+            table.insert(clean_query, char)
+        end
+    end
+    return clean_query
+end
+
 -- Remove the previous preedit from the query
 function M.remove_old_preedit(query, prev_preedit, marker_henkan, marker_henkan_select)
     -- 1. Remove by character count of prev_preedit
@@ -297,6 +309,9 @@ function M.wrap_default_match()
             if ok_s and skk_e then
                 opts = opts or {}
                 opts.sync = true
+
+                -- Clean query by stripping conversion markers (▽/▼)
+                query = M.clean_query_markers(query)
             end
             return orig_default_match(stritems, inds, query, opts)
         end
@@ -336,6 +351,38 @@ end
 function M.setup_getcharstr_patch()
     if _G.skkeleton_pickers_minipick_patched then
         return
+    end
+
+    if MiniPick and not M.skkeleton_pickers_start_patched then
+        M.skkeleton_pickers_start_patched = true
+        local orig_start = MiniPick.start
+        MiniPick.start = function(opts)
+            opts = opts or {}
+            opts.mappings = opts.mappings or {}
+
+            -- Add a dummy action for \x1c (Ctrl-\) to prevent MiniPick from setting do_match = true
+            -- inside H.picker_advance loop, which would trigger double-matching and kill the async grep processes
+            if not opts.mappings.skkeleton_pickers_ignore then
+                opts.mappings.skkeleton_pickers_ignore = {
+                    char = "\x1c",
+                    func = function() end,
+                }
+            end
+
+            -- Clean the query from conversion markers (▽/▼) in custom source matches
+            if opts.source and type(opts.source.match) == "function" then
+                local orig_match = opts.source.match
+                opts.source.match = function(stritems, inds, query, opts_match)
+                    local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
+                    if ok_s and skk_e then
+                        query = M.clean_query_markers(query)
+                    end
+                    return orig_match(stritems, inds, query, opts_match)
+                end
+            end
+
+            return orig_start(opts)
+        end
     end
 
     local orig_getcharstr = vim.fn.getcharstr

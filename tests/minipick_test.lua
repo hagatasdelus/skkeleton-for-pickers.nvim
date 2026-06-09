@@ -553,6 +553,74 @@ assert_eq(q_case_t[4], "す", "Fourth char")
 
 vim.fn["denops#request"] = orig_denops_request
 
+-- Case U: default_match wrapping behavior with markers (▽/▼)
+reset_mock()
+mock.is_enabled = true
+local passed_query_to_orig_match = nil
+_G.MiniPick = {
+    active_picker = { query = {}, caret = 1 },
+    is_picker_active_val = true,
+}
+function _G.MiniPick.default_match(stritems, inds, query, opts)
+    passed_query_to_orig_match = query
+    return inds
+end
+
+-- Re-wrap default_match (normally done by wrap_default_match)
+package.loaded["skkeleton-pickers.minipick"].skkeleton_pickers_wrapped = nil
+package.loaded["skkeleton-pickers.minipick"].wrap_default_match()
+
+MiniPick.default_match({}, {1}, {"▽", "か", "▼", "な"}, {})
+assert_eq(#passed_query_to_orig_match, 2, "Marker characters should be stripped from query in default_match")
+assert_eq(passed_query_to_orig_match[1], "か", "First char should be 'か'")
+assert_eq(passed_query_to_orig_match[2], "な", "Second char should be 'な'")
+
+-- Case V: MiniPick.start wrapping behavior
+reset_mock()
+mock.is_enabled = true
+local passed_query_to_custom_match = nil
+local dummy_start_called = false
+
+_G.MiniPick = {
+    active_picker = { query = {}, caret = 1 },
+    is_picker_active_val = true,
+}
+function _G.MiniPick.start(opts)
+    dummy_start_called = true
+    -- Call custom match to verify query cleaning
+    if opts.source and opts.source.match then
+        opts.source.match({}, {1}, {"▽", "て", "s", "u"}, {})
+    end
+    return opts
+end
+
+-- Trigger initialization or setup to patch MiniPick.start
+_G.skkeleton_pickers_minipick_patched = nil
+package.loaded["skkeleton-pickers.minipick"].skkeleton_pickers_start_patched = nil
+package.loaded["skkeleton-pickers.minipick"].setup_getcharstr_patch()
+
+local test_opts = {
+    source = {
+        match = function(stritems, inds, query, opts)
+            passed_query_to_custom_match = query
+            return inds
+        end
+    },
+    mappings = {}
+}
+
+local res_opts = MiniPick.start(test_opts)
+assert_true(dummy_start_called, "Original MiniPick.start should be called")
+assert_true(res_opts.mappings.skkeleton_pickers_ignore ~= nil, "skkeleton_pickers_ignore mapping should be added")
+assert_eq(res_opts.mappings.skkeleton_pickers_ignore.char, "\x1c", "ignore char should be Ctrl-\\")
+assert_eq(type(res_opts.mappings.skkeleton_pickers_ignore.func), "function", "ignore func should be a function")
+
+assert_true(passed_query_to_custom_match ~= nil, "Custom match function should be called")
+assert_eq(#passed_query_to_custom_match, 3, "Marker characters should be stripped from query in custom match")
+assert_eq(passed_query_to_custom_match[1], "て", "First char should be 'て'")
+assert_eq(passed_query_to_custom_match[2], "s", "Second char")
+assert_eq(passed_query_to_custom_match[3], "u", "Third char")
+
 vim.fn.getcharstr = orig_fn_getcharstr
 _G.MiniPick = nil
 
@@ -562,3 +630,4 @@ if fail_count > 0 then
 else
     os.exit(0)
 end
+

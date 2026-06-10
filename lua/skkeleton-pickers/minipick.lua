@@ -318,8 +318,57 @@ function M.wrap_default_match()
     end
 end
 
+-- Wrap the active picker's options dynamically (Lazy-load safe)
+function M.wrap_active_picker_opts()
+    local ok_pick, pick_active = pcall(function()
+        return MiniPick and MiniPick.is_picker_active()
+    end)
+    if not (ok_pick and pick_active) then
+        return
+    end
+
+    if type(MiniPick.get_picker_opts) ~= "function" or type(MiniPick.set_picker_opts) ~= "function" then
+        return
+    end
+
+    local opts = MiniPick.get_picker_opts()
+    if not opts then
+        return
+    end
+
+    local modified = false
+    opts.mappings = opts.mappings or {}
+    if not opts.mappings.skkeleton_pickers_ignore then
+        opts.mappings.skkeleton_pickers_ignore = {
+            char = "\x1c",
+            func = function() end,
+        }
+        modified = true
+    end
+
+    if opts.source and type(opts.source.match) == "function" and not opts.source.skkeleton_pickers_match_wrapped then
+        local orig_match = opts.source.match
+        opts.source.match = function(stritems, inds, query, opts_match)
+            local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
+            if ok_s and skk_e then
+                query = M.clean_query_markers(query)
+            end
+            return orig_match(stritems, inds, query, opts_match)
+        end
+        opts.source.skkeleton_pickers_match_wrapped = true
+        modified = true
+    end
+
+    if modified then
+        MiniPick.set_picker_opts(opts)
+    end
+end
+
 -- Process keypress logic for mini.pick and route to skkeleton if needed
 function M.handle_picker_char(char)
+    -- Wrap active picker's options dynamically
+    M.wrap_active_picker_opts()
+
     -- Wrap default_match to support synchronous matching when routing skkeleton keys
     M.wrap_default_match()
 
@@ -351,38 +400,6 @@ end
 function M.setup_getcharstr_patch()
     if _G.skkeleton_pickers_minipick_patched then
         return
-    end
-
-    if MiniPick and not M.skkeleton_pickers_start_patched then
-        M.skkeleton_pickers_start_patched = true
-        local orig_start = MiniPick.start
-        MiniPick.start = function(opts)
-            opts = opts or {}
-            opts.mappings = opts.mappings or {}
-
-            -- Add a dummy action for \x1c (Ctrl-\) to prevent MiniPick from setting do_match = true
-            -- inside H.picker_advance loop, which would trigger double-matching and kill the async grep processes
-            if not opts.mappings.skkeleton_pickers_ignore then
-                opts.mappings.skkeleton_pickers_ignore = {
-                    char = "\x1c",
-                    func = function() end,
-                }
-            end
-
-            -- Clean the query from conversion markers (▽/▼) in custom source matches
-            if opts.source and type(opts.source.match) == "function" then
-                local orig_match = opts.source.match
-                opts.source.match = function(stritems, inds, query, opts_match)
-                    local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
-                    if ok_s and skk_e then
-                        query = M.clean_query_markers(query)
-                    end
-                    return orig_match(stritems, inds, query, opts_match)
-                end
-            end
-
-            return orig_start(opts)
-        end
     end
 
     local orig_getcharstr = vim.fn.getcharstr

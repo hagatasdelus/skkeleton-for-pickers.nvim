@@ -7,7 +7,9 @@ local fail_count = 0
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
-        print(string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or ""))
+        print(
+            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+        )
     else
         pass_count = pass_count + 1
     end
@@ -121,7 +123,9 @@ vim.bo[buf].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf)
 vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonPickers", buffer = buf })
 
-vim.wait(20, function() return false end)
+vim.wait(20, function()
+    return false
+end)
 
 local maps = vim.api.nvim_buf_get_keymap(buf, "i")
 local found_toggle = false
@@ -172,7 +176,9 @@ for _, m in ipairs(maps) do
 end
 if not found_cr then
     vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
-    vim.wait(20, function() return false end)
+    vim.wait(20, function()
+        return false
+    end)
     maps = vim.api.nvim_buf_get_keymap(buf, "i")
     for _, m in ipairs(maps) do
         if m.lhs:upper() == "<CR>" then
@@ -203,7 +209,9 @@ vim.keymap.set("i", "<CR>", function()
     original_cr_called = original_cr_called + 1
 end, { buffer = buf })
 vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
-vim.wait(20, function() return false end)
+vim.wait(20, function()
+    return false
+end)
 
 maps = vim.api.nvim_buf_get_keymap(buf, "i")
 found_cr = nil
@@ -232,7 +240,9 @@ vim.keymap.set("i", "<CR>", function()
     original_cr_called = original_cr_called + 1
 end, { buffer = buf })
 vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
-vim.wait(20, function() return false end)
+vim.wait(20, function()
+    return false
+end)
 
 maps = vim.api.nvim_buf_get_keymap(buf, "i")
 found_cr = nil

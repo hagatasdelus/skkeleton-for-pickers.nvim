@@ -7,7 +7,9 @@ local fail_count = 0
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
-        print(string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or ""))
+        print(
+            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+        )
     else
         pass_count = pass_count + 1
     end
@@ -136,9 +138,25 @@ function _G.MiniPick.default_match(stritems, inds, query, opts)
     return inds
 end
 
-function _G.MiniPick.get_picker_items() return {} end
-function _G.MiniPick.is_picker_active() return _G.MiniPick.is_picker_active_val end
-function _G.MiniPick.get_picker_query() return _G.MiniPick.active_picker.query end
+_G.MiniPick.opts = {
+    source = {},
+    mappings = {},
+}
+function _G.MiniPick.get_picker_items()
+    return {}
+end
+function _G.MiniPick.is_picker_active()
+    return _G.MiniPick.is_picker_active_val
+end
+function _G.MiniPick.get_picker_query()
+    return _G.MiniPick.active_picker.query
+end
+function _G.MiniPick.get_picker_opts()
+    return _G.MiniPick.opts
+end
+function _G.MiniPick.set_picker_opts(opts)
+    _G.MiniPick.opts = opts
+end
 function _G.MiniPick.set_picker_query(query)
     _G.MiniPick.active_picker.query = query
     _G.MiniPick.active_picker.caret = #query + 1
@@ -295,8 +313,12 @@ _G.MiniPick = {
     default_match_opts = nil,
 }
 function _G.MiniPick.default_match() end
-function _G.MiniPick.get_picker_query() return _G.MiniPick.active_picker.query end
-function _G.MiniPick.is_picker_active() return _G.MiniPick.is_picker_active_val end
+function _G.MiniPick.get_picker_query()
+    return _G.MiniPick.active_picker.query
+end
+function _G.MiniPick.is_picker_active()
+    return _G.MiniPick.is_picker_active_val
+end
 function _G.MiniPick.set_picker_query(query)
     _G.MiniPick.active_picker.query = query
 end
@@ -356,8 +378,12 @@ _G.MiniPick = {
     default_match_opts = nil,
 }
 function _G.MiniPick.default_match() end
-function _G.MiniPick.get_picker_query() return _G.MiniPick.active_picker.query end
-function _G.MiniPick.is_picker_active() return _G.MiniPick.is_picker_active_val end
+function _G.MiniPick.get_picker_query()
+    return _G.MiniPick.active_picker.query
+end
+function _G.MiniPick.is_picker_active()
+    return _G.MiniPick.is_picker_active_val
+end
 function _G.MiniPick.set_picker_query(query)
     _G.MiniPick.active_picker.query = query
 end
@@ -408,7 +434,7 @@ _G.MiniPick.active_picker.query = { "▽", "き" }
 -- prev_preedit is "▽き" from Case O
 vim.fn["denops#request"] = function(plugin, method, args)
     if plugin == "skkeleton" and method == "getPreEdit" then
-        return ""  -- preedit is now empty (confirmed)
+        return "" -- preedit is now empty (confirmed)
     end
     return orig_denops_request(plugin, method, args)
 end
@@ -544,7 +570,11 @@ res = vim.fn.getcharstr()
 assert_eq(res, "\x1c", "Backspace termcode should be intercepted and routed")
 assert_eq(#mock.handle_calls, 1, "Should route to skkeleton")
 assert_eq(mock.handle_calls[1].func, "handleKey", "Should handleKey")
-assert_eq(mock.handle_calls[1].opts.key[1], "\x08", "BS termcode should be converted to ASCII BS when routed to skkeleton")
+assert_eq(
+    mock.handle_calls[1].opts.key[1],
+    "\x08",
+    "BS termcode should be converted to ASCII BS when routed to skkeleton"
+)
 
 local q_case_t = _G.MiniPick.get_picker_query()
 assert_eq(#q_case_t, 4, "Query should have 4 characters")
@@ -552,6 +582,85 @@ assert_eq(q_case_t[1], "▽", "First char")
 assert_eq(q_case_t[4], "す", "Fourth char")
 
 vim.fn["denops#request"] = orig_denops_request
+
+-- Case U: default_match wrapping behavior with markers (▽/▼)
+reset_mock()
+mock.is_enabled = true
+local passed_query_to_orig_match = nil
+local passed_opts_to_orig_match = nil
+_G.MiniPick = {
+    active_picker = { query = {}, caret = 1 },
+    is_picker_active_val = true,
+}
+function _G.MiniPick.default_match(stritems, inds, query, opts)
+    passed_query_to_orig_match = query
+    passed_opts_to_orig_match = opts
+    return inds
+end
+
+-- Re-wrap default_match (normally done by wrap_default_match)
+package.loaded["skkeleton-pickers.minipick"].skkeleton_pickers_wrapped = nil
+package.loaded["skkeleton-pickers.minipick"].wrap_default_match()
+
+MiniPick.default_match({}, { 1 }, { "▽", "か", "▼", "な" }, {})
+assert_eq(#passed_query_to_orig_match, 2, "Marker characters should be stripped from query in default_match")
+assert_eq(passed_query_to_orig_match[1], "か", "First char should be 'か'")
+assert_eq(passed_query_to_orig_match[2], "な", "Second char should be 'な'")
+assert_true(
+    passed_opts_to_orig_match ~= nil and passed_opts_to_orig_match.sync == true,
+    "opts.sync should be true in default_match wrapper"
+)
+
+-- Case V: Dynamic options wrapping on handle_picker_char
+reset_mock()
+mock.is_enabled = true
+local passed_query_to_custom_match = nil
+local set_picker_opts_called = false
+
+local test_opts = {
+    source = {
+        match = function(stritems, inds, query, opts_match)
+            passed_query_to_custom_match = query
+            return inds
+        end,
+    },
+    mappings = {},
+}
+
+_G.MiniPick = {
+    active_picker = { query = {}, caret = 1 },
+    is_picker_active_val = true,
+    get_picker_opts = function()
+        return test_opts
+    end,
+    set_picker_opts = function(opts)
+        set_picker_opts_called = true
+        test_opts = opts
+    end,
+    is_picker_active = function()
+        return true
+    end,
+    get_picker_query = function()
+        return { "▽", "て", "s", "u" }
+    end,
+    set_picker_query = function(q) end,
+}
+
+local minipick_mod = package.loaded["skkeleton-pickers.minipick"]
+minipick_mod.handle_picker_char("a")
+
+assert_true(set_picker_opts_called, "MiniPick.set_picker_opts should be called during handle_picker_char")
+assert_true(test_opts.mappings.skkeleton_pickers_ignore ~= nil, "skkeleton_pickers_ignore mapping should be added")
+assert_eq(test_opts.mappings.skkeleton_pickers_ignore.char, "\x1c", "ignore char should be Ctrl-\\")
+assert_eq(type(test_opts.mappings.skkeleton_pickers_ignore.func), "function", "ignore func should be a function")
+
+assert_true(test_opts.source.match ~= nil, "source.match should exist")
+test_opts.source.match({}, { 1 }, { "▽", "て", "s", "u" }, {})
+assert_true(passed_query_to_custom_match ~= nil, "Custom match function should be called")
+assert_eq(#passed_query_to_custom_match, 3, "Marker characters should be stripped from query in custom match")
+assert_eq(passed_query_to_custom_match[1], "て", "First char should be 'て'")
+assert_eq(passed_query_to_custom_match[2], "s", "Second char")
+assert_eq(passed_query_to_custom_match[3], "u", "Third char")
 
 vim.fn.getcharstr = orig_fn_getcharstr
 _G.MiniPick = nil

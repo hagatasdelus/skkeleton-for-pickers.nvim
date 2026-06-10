@@ -587,12 +587,14 @@ vim.fn["denops#request"] = orig_denops_request
 reset_mock()
 mock.is_enabled = true
 local passed_query_to_orig_match = nil
+local passed_opts_to_orig_match = nil
 _G.MiniPick = {
     active_picker = { query = {}, caret = 1 },
     is_picker_active_val = true,
 }
 function _G.MiniPick.default_match(stritems, inds, query, opts)
     passed_query_to_orig_match = query
+    passed_opts_to_orig_match = opts
     return inds
 end
 
@@ -604,6 +606,10 @@ MiniPick.default_match({}, { 1 }, { "▽", "か", "▼", "な" }, {})
 assert_eq(#passed_query_to_orig_match, 2, "Marker characters should be stripped from query in default_match")
 assert_eq(passed_query_to_orig_match[1], "か", "First char should be 'か'")
 assert_eq(passed_query_to_orig_match[2], "な", "Second char should be 'な'")
+assert_true(
+    passed_opts_to_orig_match ~= nil and passed_opts_to_orig_match.sync == true,
+    "opts.sync should be true in default_match wrapper"
+)
 
 -- Case V: Dynamic options wrapping on handle_picker_char
 reset_mock()

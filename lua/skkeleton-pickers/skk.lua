@@ -2,7 +2,18 @@ local M = {}
 
 local config = require("skkeleton-pickers.config")
 
-function M.has_skkeleton_marker()
+M.MODE_MAP = {
+    henkan = "hirakana",
+    zenkaku = "zenkaku",
+    katakana = "katakana",
+    hankata = "hankatakana",
+    hankatakana = "hankatakana",
+    abbrev = "abbrev",
+    hira = "hirakana",
+    kata = "katakana",
+}
+
+function M.get_skk_markers()
     local marker_henkan = "▽"
     local marker_henkan_select = "▼"
     local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
@@ -10,12 +21,18 @@ function M.has_skkeleton_marker()
         marker_henkan = cfg.markerHenkan or marker_henkan
         marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
     end
+    return marker_henkan, marker_henkan_select
+end
+
+function M.has_skkeleton_marker()
+    local marker_henkan, marker_henkan_select = M.get_skk_markers()
 
     -- If mini.pick is active, check the picker query
-    local ok_pick, pick_active = pcall(function()
-        return MiniPick and MiniPick.is_picker_active()
-    end)
-    if ok_pick and pick_active then
+    local pick_active = false
+    if _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" then
+        pick_active = _G.MiniPick.is_picker_active()
+    end
+    if pick_active then
         local query = MiniPick.get_picker_query()
         local query_str = table.concat(query)
         return (query_str:find(marker_henkan, 1, true) ~= nil) or (query_str:find(marker_henkan_select, 1, true) ~= nil)
@@ -31,10 +48,11 @@ end
 function M.call_skk_handle(func, opts)
     -- Build prevInput from the current mini.pick query
     local query_str = ""
-    local ok_pick, pick_active = pcall(function()
-        return MiniPick and MiniPick.is_picker_active()
-    end)
-    if ok_pick and pick_active then
+    local pick_active = false
+    if _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" then
+        pick_active = _G.MiniPick.is_picker_active()
+    end
+    if pick_active then
         local query = MiniPick.get_picker_query()
         query_str = table.concat(query)
     end

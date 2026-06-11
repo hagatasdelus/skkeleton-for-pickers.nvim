@@ -47,17 +47,7 @@ function M.apply_default_mode(buf)
         return
     end
 
-    local mode_map = {
-        henkan = "hirakana",
-        zenkaku = "zenkaku",
-        katakana = "katakana",
-        hankata = "hankatakana",
-        hankatakana = "hankatakana",
-        abbrev = "abbrev",
-        hira = "hirakana",
-        kata = "katakana",
-    }
-    local func = mode_map[default_mode]
+    local func = skk.MODE_MAP[default_mode]
     if not func then
         return
     end

@@ -7,7 +7,9 @@ local fail_count = 0
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
-        print(string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or ""))
+        print(
+            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+        )
     else
         pass_count = pass_count + 1
     end

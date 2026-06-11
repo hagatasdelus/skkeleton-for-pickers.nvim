@@ -29,7 +29,7 @@ skkeleton-pickers.nvim は、Neovim の主要な Fuzzy Finder（ファジーフ�
   (Kakutei) を行い、未確定文字列がない場合は本来の決定処理を実行。
 - 動的なマーカー追従: skkeleton の `markerHenkan` や `markerHenkanSelect` 設定
   を動的に読み込み、どのようなマーカーを設定していても完璧に動作。
-- Telescope、Snacks.picker、および mini.pick を公式サポート。
+- Telescope、Snacks.picker、および mini.pick をサポート。
 
 ==============================================================================
 必要要件						*skkeleton-pickers-requirements*

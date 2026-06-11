@@ -4,8 +4,6 @@
 
 Normally, keymaps and modes of SKK can conflict with the prompt behavior of fuzzy finders. This plugin resolves those conflicts, allowing you to use SKK Japanese input in fuzzy finders stress-free.
 
----
-
 ## Features
 
 - **Seamless Input Experience** — Automatically enables SKK mode when a fuzzy finder prompts and keeps your input flow smooth.
@@ -13,15 +11,11 @@ Normally, keymaps and modes of SKK can conflict with the prompt behavior of fuzz
 - **Dynamic Marker Support** — Dynamically tracks skkeleton configuration markers (e.g. `markerHenkan` and `markerHenkanSelect`), meaning it works seamlessly with custom indicators.
 - **Popular Finders Support** — Out-of-the-box support for Telescope, Snacks.picker, and mini.pick.
 
----
-
 ## Requirements
 
 - Neovim >= 0.11.0 (or Neovim >= 0.12.0 for built-in `vim.pack`)
 - [vim-denops/denops.vim](https://github.com/vim-denops/denops.vim)
 - [vim-skk/skkeleton](https://github.com/vim-skk/skkeleton)
-
----
 
 ## Installation
 
@@ -69,8 +63,6 @@ vim.pack.add({
 require("skkeleton-pickers").setup({})
 ```
 
----
-
 ## Configuration
 
 You can customize the behavior by passing options to `setup()`:
@@ -93,8 +85,6 @@ require("skkeleton-pickers").setup({
   toggle_key = "<C-j>",
 })
 ```
-
----
 
 ## License
 

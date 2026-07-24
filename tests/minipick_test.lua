@@ -106,16 +106,12 @@ print("Running Test 6: mini.pick integration via getcharstr monkeypatch...")
 reset_mock()
 
 local fed_char = "a"
-local orig_fn_getcharstr = vim.fn.getcharstr
-vim.fn.getcharstr = function()
-    return fed_char
-end
-
-vim.fn.getcharstr = orig_fn_getcharstr
+local orig_fn_getcharstr = nil
 _G.skkeleton_pickers_minipick_patched = nil
-vim.fn.getcharstr = function()
+orig_fn_getcharstr = function()
     return fed_char
 end
+vim.fn.getcharstr = orig_fn_getcharstr
 
 package.loaded["skkeleton-pickers"] = nil
 package.loaded["skkeleton-pickers.config"] = nil
@@ -168,6 +164,16 @@ picker_new.setup({
     toggle_key = "<C-j>",
     default_mode = "eisu",
 })
+
+-- Verify getcharstr is NOT patched immediately after setup
+assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr should not be patched immediately after setup")
+assert_eq(vim.fn.getcharstr, orig_fn_getcharstr, "getcharstr should remain unpatched after setup")
+
+-- Simulate MiniPickStart event
+vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
+
+-- Verify getcharstr IS patched after MiniPickStart
+assert_true(_G.skkeleton_pickers_minipick_patched == true, "getcharstr should be patched after MiniPickStart")
 
 -- Case A: Skkeleton disabled, MiniPick active
 mock.is_enabled = false
@@ -275,11 +281,15 @@ mock.is_enabled = false
 mock.enabled_count = 0
 mock.handle_calls = {}
 
+-- Restore patch before reload to prevent memory leak / infinite recursion
+vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
+
 vim.fn.getcharstr = orig_fn_getcharstr
 _G.skkeleton_pickers_minipick_patched = nil
-vim.fn.getcharstr = function()
+orig_fn_getcharstr = function()
     return fed_char
 end
+vim.fn.getcharstr = orig_fn_getcharstr
 
 package.loaded["skkeleton-pickers"] = nil
 package.loaded["skkeleton-pickers.config"] = nil
@@ -293,6 +303,9 @@ picker_henkan.setup({
     default_mode = "henkan",
 })
 
+-- Simulate MiniPickStart event
+vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
+
 _G.MiniPick.active_picker.query = { "a" }
 fed_char = "b"
 res = vim.fn.getcharstr()
@@ -304,6 +317,9 @@ assert_eq(mock.handle_calls[2].opts["function"], "hirakana", "Should set to hira
 
 -- Case L: process_skk_result backspace safety
 -- When result contains \8 but preedit was active (▽u), backspaces erase old preedit, not confirmed text
+-- First stop the picker to clean up current patch
+vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
+
 _G.MiniPick = {
     active_picker = {
         query = { "あ", "い", "▽", "u" },
@@ -326,6 +342,7 @@ end
 mock.preedit = ""
 -- Mock a backspace-led confirmed result
 picker_henkan.setup({ mini_pick = true })
+vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
 -- Set prev_preedit to the old preedit that backspaces target
 package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽u"
 -- Mock getPreEdit to return empty (conversion confirmed)
@@ -662,7 +679,13 @@ assert_eq(passed_query_to_custom_match[1], "て", "First char should be 'て'")
 assert_eq(passed_query_to_custom_match[2], "s", "Second char")
 assert_eq(passed_query_to_custom_match[3], "u", "Third char")
 
-vim.fn.getcharstr = orig_fn_getcharstr
+-- Simulate MiniPickStop event
+vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
+
+-- Verify patch is restored
+assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr patch should be removed after MiniPickStop")
+assert_eq(vim.fn.getcharstr, orig_fn_getcharstr, "getcharstr should be restored to original function")
+
 _G.MiniPick = nil
 
 print(string.format("\nminipick_test finished: %d passed, %d failed", pass_count, fail_count))

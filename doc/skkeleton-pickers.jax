@@ -73,20 +73,23 @@ vim.pack の場合 (Neovim 0.12+): >lua
 ==============================================================================
 設定							*skkeleton-pickers-configuration*
 
+注意: 各ピッカーはデフォルトで無効 (false) です。利用するには setup() にて
+明示的に有効にする必要があります。
+
 setup() にオプションを渡すことで挙動をカスタマイズできます: >lua
 
   require("skkeleton-pickers").setup({
-    -- 特定のピッカーでのみ有効化したい場合は false に設定可能 (デフォルトはすべて true)
-    telescope = true,
-    snacks = true,
-    mini_pick = true,
+    -- 特定のピッカーでのみ有効化したい場合は true に設定 (デフォルトはすべて false)
+    telescope = false,
+    snacks = false,
+    mini_pick = false,
 
     -- 追加で有効にしたいカスタムバッファの filetype リスト
     filetypes = {},
 
-    -- 各ファインダーのプロンプトに入った際のデフォルト動作
+    -- 各ファインダーのプロンプトに入った際のデフォルト動作 (デフォルトは "eisu")
     -- "henkan" (即座にSKK変換モード), "zenkaku" (全角英数), "eisu" (直接入力), "katakana" (カタカナ) などを指定可能
-    default_mode = "henkan",
+    default_mode = "eisu",
 
     -- skkeleton のトグルキー (デフォルトは "<C-j>")
     toggle_key = "<C-j>",

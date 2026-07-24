@@ -25,7 +25,10 @@ function M.setup(opts)
         table.insert(buffer.active_fts, "minipick")
     end
 
-    local group = vim.api.nvim_create_augroup("SkkeletonPickers", { clear = true })
+    local group = nil
+    if #buffer.active_fts > 0 or M.config.mini_pick then
+        group = vim.api.nvim_create_augroup("SkkeletonPickers", { clear = true })
+    end
 
     if #buffer.active_fts > 0 then
         vim.api.nvim_create_autocmd({ "FileType", "BufEnter", "WinEnter", "InsertEnter" }, {
@@ -51,16 +54,21 @@ function M.setup(opts)
     -- Set up mini.pick autocommands and getcharstr monkeypatch for mini.pick support
     if M.config.mini_pick then
         vim.api.nvim_create_autocmd("User", {
+            pattern = "MiniPickStart",
+            group = group,
+            callback = minipick.apply_patch,
+        })
+
+        vim.api.nvim_create_autocmd("User", {
             pattern = "MiniPickStop",
             group = group,
             callback = function()
                 minipick.picker_initialized = false
                 minipick.prev_preedit = ""
                 pcall(vim.fn["skkeleton#disable"])
+                minipick.restore_patch()
             end,
         })
-
-        minipick.setup_getcharstr_patch()
     end
 end
 

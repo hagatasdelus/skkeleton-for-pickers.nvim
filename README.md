@@ -67,19 +67,22 @@ require("skkeleton-pickers").setup({})
 
 You can customize the behavior by passing options to `setup()`:
 
+> [!NOTE]
+> All pickers are disabled by default (`false`). You must explicitly set them to `true` to enable integration.
+
 ```lua
 require("skkeleton-pickers").setup({
-  -- Enable/disable integration for specific fuzzy finders (Default: true)
-  telescope = true,
-  snacks = true,
-  mini_pick = true,
+  -- Enable/disable integration for specific fuzzy finders (Default: false)
+  telescope = false,
+  snacks = false,
+  mini_pick = false,
 
   -- Additional filetypes of custom buffers where you want to enable this integration
   filetypes = {},
 
-  -- The default SKK mode applied when entering the prompt.
+  -- The default SKK mode applied when entering the prompt (Default: "eisu").
   -- Can be "henkan" (Hiragana), "zenkaku" (Zenkaku Eisu), "eisu" (Direct input), or "katakana" (Katakana)
-  default_mode = "henkan",
+  default_mode = "eisu",
 
   -- Key to toggle skkeleton (Default: "<C-j>")
   toggle_key = "<C-j>",

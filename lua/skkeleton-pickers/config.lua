@@ -1,9 +1,9 @@
 local M = {}
 
 M.default_config = {
-    telescope = true,
-    snacks = true,
-    mini_pick = true,
+    telescope = false,
+    snacks = false,
+    mini_pick = false,
     filetypes = {},
     default_mode = "eisu",
     toggle_key = "<C-j>",

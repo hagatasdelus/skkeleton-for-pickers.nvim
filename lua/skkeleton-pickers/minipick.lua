@@ -7,6 +7,7 @@ local skk = require("skkeleton-pickers.skk")
 M.picker_initialized = false
 M.is_routing_skk = false
 M.prev_preedit = ""
+local orig_getcharstr = nil
 
 -- Cache key termcodes and control characters to avoid repeated Neovim C-API calls
 local DEL_TERMCODE = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
@@ -384,18 +385,14 @@ function M.handle_picker_char(char)
     return char
 end
 
-function M.setup_getcharstr_patch()
-    if _G.skkeleton_pickers_minipick_patched then
+function M.apply_patch()
+    if orig_getcharstr then
         return
     end
 
-    local orig_getcharstr = vim.fn.getcharstr
+    orig_getcharstr = vim.fn.getcharstr
     vim.fn.getcharstr = function(...)
         local char = orig_getcharstr(...)
-
-        if not config.options.mini_pick then
-            return char
-        end
 
         -- Normalize backspace key
         if char == "\x7f" then
@@ -410,6 +407,14 @@ function M.setup_getcharstr_patch()
     end
 
     _G.skkeleton_pickers_minipick_patched = true
+end
+
+function M.restore_patch()
+    if orig_getcharstr then
+        vim.fn.getcharstr = orig_getcharstr
+        orig_getcharstr = nil
+    end
+    _G.skkeleton_pickers_minipick_patched = nil
 end
 
 return M

@@ -97,13 +97,13 @@ print("Running Test 1: Config merging...")
 picker.setup({
     default_mode = "zenkaku",
     toggle_key = "<C-k>",
-    telescope = false,
+    telescope = true,
 })
 assert_eq(picker.config.default_mode, "zenkaku", "default_mode should be updated")
 assert_eq(picker.config.toggle_key, "<C-k>", "toggle_key should be updated")
-assert_eq(picker.config.telescope, false, "telescope should be disabled")
-assert_eq(picker.config.snacks, true, "snacks should default to true")
-assert_eq(picker.config.mini_pick, true, "mini_pick should default to true")
+assert_eq(picker.config.telescope, true, "telescope should be enabled")
+assert_eq(picker.config.snacks, false, "snacks should default to false")
+assert_eq(picker.config.mini_pick, false, "mini_pick should default to false")
 
 -- Test 4: Default Mode application on setup
 print("Running Test 4: Default Mode application on setup...")
@@ -126,6 +126,42 @@ assert_eq(mock.handle_calls[1].func, "enable", "First call should be enable")
 assert_eq(mock.handle_calls[2].func, "handleKey", "Second call should be handleKey")
 assert_eq(mock.handle_calls[2].opts.key[1], "", "Should send empty key array")
 assert_eq(mock.handle_calls[2].opts["function"], "zenkaku", "Should change to zenkaku mode")
+
+-- Test 5: Bypass setup for disabled pickers
+print("Running Test 5: Bypass setup for disabled pickers...")
+package.loaded["skkeleton-pickers"] = nil
+package.loaded["skkeleton-pickers.config"] = nil
+package.loaded["skkeleton-pickers.buffer"] = nil
+package.loaded["skkeleton-pickers.skk"] = nil
+package.loaded["skkeleton-pickers.minipick"] = nil
+_G.skkeleton_pickers_minipick_patched = nil
+
+local orig_getcharstr = vim.fn.getcharstr
+
+local picker_bypass = require("skkeleton-pickers")
+picker_bypass.setup({
+    telescope = true,
+})
+
+assert_eq(picker_bypass.config.telescope, true, "telescope should be enabled")
+assert_eq(picker_bypass.config.snacks, false, "snacks should be disabled by default")
+assert_eq(picker_bypass.config.mini_pick, false, "mini_pick should be disabled by default")
+
+local has_telescope = false
+local has_snacks = false
+local has_minipick = false
+local buffer_mod = require("skkeleton-pickers.buffer")
+for _, ft in ipairs(buffer_mod.active_fts) do
+    if ft == "TelescopePrompt" then has_telescope = true end
+    if ft == "snacks_picker_input" then has_snacks = true end
+    if ft == "minipick" then has_minipick = true end
+end
+assert_eq(has_telescope, true, "active_fts should contain TelescopePrompt")
+assert_eq(has_snacks, false, "active_fts should NOT contain snacks_picker_input")
+assert_eq(has_minipick, false, "active_fts should NOT contain minipick")
+
+assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr should not be patched when mini_pick is disabled")
+assert_eq(vim.fn.getcharstr, orig_getcharstr, "getcharstr function pointer should remain unchanged")
 
 print(string.format("\nconfig_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

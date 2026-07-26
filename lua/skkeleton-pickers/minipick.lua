@@ -1,7 +1,6 @@
 ---@diagnostic disable: duplicate-set-field
 local M = {}
 
-local config = require("skkeleton-pickers.config")
 local skk = require("skkeleton-pickers.skk")
 
 M.picker_initialized = false
@@ -169,7 +168,7 @@ function M.process_skk_result(result)
     MiniPick.set_picker_query(query)
 end
 
-function M.should_route_to_skk(char, toggle_raw)
+function M.should_route_to_skk(char)
     if char == DEL_TERMCODE or char == BS_TERMCODE or char == BSPACE_TERMCODE then
         return true
     end
@@ -178,9 +177,6 @@ function M.should_route_to_skk(char, toggle_raw)
         return false
     end
     if char == "\x08" or char == "\x7f" then
-        return true
-    end
-    if char == toggle_raw then
         return true
     end
 
@@ -199,48 +195,6 @@ function M.should_route_to_skk(char, toggle_raw)
 
     local code = char:byte(1)
     return code and code >= 32 and code <= 126
-end
-
--- Initialize default mode if not yet initialized
-function M.initialize_picker_mode()
-    if M.picker_initialized then
-        return
-    end
-    M.picker_initialized = true
-    local default_mode = config.options.default_mode
-    if default_mode and default_mode ~= "eisu" then
-        M.is_routing_skk = true
-        skk.call_skk_handle("enable", { expr = true })
-        local func = skk.MODE_MAP[default_mode]
-        if func then
-            skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
-        end
-        M.is_routing_skk = false
-    end
-end
-
--- Process the toggle keypress to enable/disable skkeleton
-function M.handle_toggle_key(toggle_raw)
-    local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
-    if not ok_skk then
-        return IGNORE_CHAR
-    end
-
-    if skk_enabled then
-        pcall(vim.fn["skkeleton#disable"])
-    else
-        M.is_routing_skk = true
-        skk.call_skk_handle("enable", { expr = true })
-        local default_mode = config.options.default_mode
-        if default_mode and default_mode ~= "eisu" then
-            local func = skk.MODE_MAP[default_mode]
-            if func then
-                skk.call_skk_handle("handleKey", { key = { "" }, ["function"] = func, expr = true })
-            end
-        end
-        M.is_routing_skk = false
-    end
-    return IGNORE_CHAR
 end
 
 -- Handle normal key routing to skkeleton
@@ -347,7 +301,22 @@ function M.wrap_active_picker_opts()
     end
 end
 
-local toggle_raw_cache = nil
+-- Process the toggle keypress to enable/disable skkeleton
+function M.handle_toggle_key()
+    local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
+    if not ok_skk then
+        return IGNORE_CHAR
+    end
+
+    if skk_enabled then
+        pcall(vim.fn["skkeleton#disable"])
+    else
+        M.is_routing_skk = true
+        skk.call_skk_handle("enable", { expr = true })
+        M.is_routing_skk = false
+    end
+    return IGNORE_CHAR
+end
 
 -- Process keypress logic for mini.pick and route to skkeleton if needed
 function M.handle_picker_char(char)
@@ -357,25 +326,22 @@ function M.handle_picker_char(char)
     -- Wrap default_match to support synchronous matching when routing skkeleton keys
     M.wrap_default_match()
 
-    -- Synchronous picker initialization on first getcharstr invocation
-    M.initialize_picker_mode()
+    -- Check if user pressed any of their derived skkeleton keymaps
+    local keymaps = skk.get_skkeleton_keymaps("i")
+    for _, item in ipairs(keymaps) do
+        if char == item.raw then
+            return M.handle_toggle_key()
+        end
+    end
 
-    -- Re-evaluate skkeleton enablement state after potential initialization
+    -- Re-evaluate skkeleton enablement state
     local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
-
-    if not toggle_raw_cache then
-        toggle_raw_cache = vim.api.nvim_replace_termcodes(config.options.toggle_key or "<C-j>", true, true, true)
-    end
-
-    if char == toggle_raw_cache then
-        return M.handle_toggle_key(toggle_raw_cache)
-    end
 
     if not (ok_skk and skk_enabled and char ~= "" and char ~= nil) then
         return char
     end
 
-    if M.should_route_to_skk(char, toggle_raw_cache) then
+    if M.should_route_to_skk(char) then
         return M.route_key_to_skk(char)
     end
 

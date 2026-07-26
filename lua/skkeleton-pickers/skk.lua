@@ -1,18 +1,5 @@
 local M = {}
 
-local config = require("skkeleton-pickers.config")
-
-M.MODE_MAP = {
-    henkan = "hirakana",
-    zenkaku = "zenkaku",
-    katakana = "katakana",
-    hankata = "hankatakana",
-    hankatakana = "hankatakana",
-    abbrev = "abbrev",
-    hira = "hirakana",
-    kata = "katakana",
-}
-
 function M.get_skk_markers()
     local marker_henkan = "▽"
     local marker_henkan_select = "▼"
@@ -22,6 +9,25 @@ function M.get_skk_markers()
         marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
     end
     return marker_henkan, marker_henkan_select
+end
+
+function M.get_skkeleton_keymaps(mode)
+    mode = mode or "i"
+    local keys = {}
+    local maps = vim.api.nvim_get_keymap(mode)
+    for _, map in ipairs(maps) do
+        local rhs = map.rhs or ""
+        if rhs:find("<Plug>%(skkeleton%-") or rhs:find("skkeleton#handle") or rhs:find("skkeleton#enable") then
+            local raw_key = vim.api.nvim_replace_termcodes(map.lhs, true, true, true)
+            table.insert(keys, {
+                lhs = map.lhs,
+                raw = raw_key,
+                rhs = rhs,
+                mode = mode,
+            })
+        end
+    end
+    return keys
 end
 
 function M.has_skkeleton_marker()

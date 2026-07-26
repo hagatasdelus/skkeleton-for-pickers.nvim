@@ -105,10 +105,14 @@ local picker = require("skkeleton-pickers")
 print("Running Test 2: Buffer Setup and Keymaps...")
 reset_mock()
 
+-- Set user skkeleton keymaps for testing derivation
+vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
+vim.keymap.set("n", "<C-j>", "a<Plug>(skkeleton-enable)", { noremap = true })
+
 picker.setup({
-    default_mode = "henkan",
-    toggle_key = "<C-j>",
-    telescope = true,
+    pickers = {
+        telescope = { enabled = true },
+    },
 })
 
 local buf = vim.api.nvim_create_buf(false, true)
@@ -127,21 +131,32 @@ vim.wait(20, function()
     return false
 end)
 
-local maps = vim.api.nvim_buf_get_keymap(buf, "i")
-local found_toggle = false
+local maps_i = vim.api.nvim_buf_get_keymap(buf, "i")
+local maps_n = vim.api.nvim_buf_get_keymap(buf, "n")
+local found_toggle_i = false
+local found_enable_n = false
 local found_cr = nil
 
-for _, m in ipairs(maps) do
+for _, m in ipairs(maps_i) do
     local lhs = m.lhs:upper()
     if lhs == "<C-J>" then
-        found_toggle = true
-        assert_eq(m.rhs, "<Plug>(skkeleton-toggle)", "Toggle key should map to plug")
+        found_toggle_i = true
+        assert_eq(m.rhs, "<Plug>(skkeleton-toggle)", "Derived Insert mode toggle key should map to plug")
     elseif lhs == "<CR>" then
         found_cr = m
     end
 end
 
-assert_true(found_toggle, "Toggle keymap should be created")
+for _, m in ipairs(maps_n) do
+    local lhs = m.lhs:upper()
+    if lhs == "<C-J>" then
+        found_enable_n = true
+        assert_eq(m.rhs, "a<Plug>(skkeleton-enable)", "Derived Normal mode enable key should map")
+    end
+end
+
+assert_true(found_toggle_i, "Insert mode toggle keymap should be dynamically bound")
+assert_true(found_enable_n, "Normal mode enable keymap should be dynamically bound")
 assert_true(found_cr ~= nil, "CR keymap should be created")
 
 -- Test 3: CR Mapping execution behavior
@@ -271,9 +286,9 @@ vim.api.nvim_buf_set_name(buf3, "TestTelescopePrompt3")
 vim.keymap.set("i", "<CR>", function() end, { buffer = buf3 })
 
 picker.setup({
-    default_mode = "eisu",
-    toggle_key = "<C-j>",
-    telescope = true,
+    pickers = {
+        telescope = { enabled = true },
+    },
 })
 reset_mock()
 vim.bo[buf3].filetype = "TelescopePrompt"

@@ -1,4 +1,5 @@
 -- spec/skkeleton-pickers_spec.lua
+package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
 -- Setup mock environment for skkeleton
 local mock = {
@@ -101,25 +102,23 @@ local picker = require("skkeleton-pickers")
 -- Test 1: Config merging
 print("Running Test 1: Config merging...")
 picker.setup({
-    default_mode = "zenkaku",
-    toggle_key = "<C-k>",
-    telescope = false,
+    pickers = {
+        telescope = { enabled = true },
+    },
 })
-assert_eq(picker.config.default_mode, "zenkaku", "default_mode should be updated")
-assert_eq(picker.config.toggle_key, "<C-k>", "toggle_key should be updated")
-assert_eq(picker.config.telescope, false, "telescope should be disabled")
-assert_eq(picker.config.snacks, true, "snacks should default to true")
-assert_eq(picker.config.mini_pick, true, "mini_pick should default to true")
+assert_eq(picker.config.pickers.telescope.enabled, true, "telescope should be enabled")
+assert_eq(picker.config.pickers.mini_pick.enabled, false, "mini_pick should default to false")
 
 -- Test 2: Buffer Setup and Keymaps
 print("Running Test 2: Buffer Setup and Keymaps...")
 reset_mock()
+vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
 
--- Re-setup with defaults for testing
+-- Re-setup for testing
 picker.setup({
-    default_mode = "henkan",
-    toggle_key = "<C-j>",
-    telescope = true,
+    pickers = {
+        telescope = { enabled = true },
+    },
 })
 
 local buf = vim.api.nvim_create_buf(false, true)
@@ -152,13 +151,12 @@ for _, m in ipairs(maps) do
     local lhs = m.lhs:upper()
     if lhs == "<C-J>" then
         found_toggle = true
-        assert_eq(m.rhs, "<Plug>(skkeleton-toggle)", "Toggle key should map to plug")
     elseif lhs == "<CR>" then
         found_cr = m
     end
 end
 
-assert_true(found_toggle, "Toggle keymap should be created")
+assert_true(found_toggle, "Toggle keymap should be dynamically created")
 assert_true(found_cr ~= nil, "CR keymap should be created")
 
 -- Test 3: CR Mapping execution behavior
@@ -308,35 +306,6 @@ assert_eq(mock.handle_calls[1].opts.key, "\n", "Should pass NL key")
 assert_eq(mock.disabled_count, 0, "Should NOT disable skkeleton when custom marker is present")
 assert_eq(original_cr_called, 0, "Original CR should NOT be called when custom marker is present")
 
--- Test 4: Default Mode application on setup
-print("Running Test 4: Default Mode application on setup...")
-
--- Setup with default_mode = "zenkaku"
-picker.setup({
-    default_mode = "zenkaku",
-    toggle_key = "<C-j>",
-    telescope = true,
-})
-
-reset_mock()
-local buf2 = vim.api.nvim_create_buf(false, true)
-vim.api.nvim_buf_set_name(buf2, "TestTelescopePrompt2")
-
--- Define mock CR mapping so it gets wrapped
-vim.keymap.set("i", "<CR>", function() end, { buffer = buf2 })
-
--- Set filetype to trigger autocmd
-vim.bo[buf2].filetype = "TelescopePrompt"
-vim.api.nvim_set_current_buf(buf2)
-vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonPickers", buffer = buf2 })
-
-assert_eq(mock.enabled_count, 1, "Should automatically enable skkeleton")
-assert_eq(#mock.handle_calls, 2, "Should call skkeleton#handle to enable and then change mode")
-assert_eq(mock.handle_calls[1].func, "enable", "First call should be enable")
-assert_eq(mock.handle_calls[2].func, "handleKey", "Second call should be handleKey")
-assert_eq(mock.handle_calls[2].opts.key[1], "", "Should send empty key array")
-assert_eq(mock.handle_calls[2].opts["function"], "zenkaku", "Should change to zenkaku mode")
-
 -- Test 5: skkeleton-enable-post autocmd re-applies CR mapping
 print("Running Test 5: skkeleton-enable-post re-applies CR mapping...")
 reset_mock()
@@ -346,11 +315,10 @@ local buf3 = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(buf3, "TestTelescopePrompt3")
 vim.keymap.set("i", "<CR>", function() end, { buffer = buf3 })
 
--- Setup with default_mode = "eisu" to avoid auto-enable
 picker.setup({
-    default_mode = "eisu",
-    toggle_key = "<C-j>",
-    telescope = true,
+    pickers = {
+        telescope = { enabled = true },
+    },
 })
 reset_mock()
 
@@ -445,10 +413,13 @@ end
 
 -- Setup with mini.pick enabled
 picker_new.setup({
-    mini_pick = true,
-    toggle_key = "<C-j>",
-    default_mode = "eisu",
+    pickers = {
+        mini_pick = { enabled = true },
+    },
 })
+
+-- Simulate MiniPickStart event
+vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
 
 -- Case A: Skkeleton disabled, MiniPick active
 -- Typing "b" should pass through directly
@@ -457,12 +428,13 @@ fed_char = "b"
 local res = vim.fn.getcharstr()
 assert_eq(res, "b", "Keys should pass through to mini.pick when skkeleton is disabled")
 
--- Case B: Toggle key
--- Typing toggle key (<C-j>) should enable skkeleton and return \x1c
+-- Case B: Derived toggle key
+-- Typing derived toggle key (<C-j>) should enable skkeleton and return \x1c
+vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
 mock.is_enabled = false
-fed_char = "\n" -- toggle key is <C-j> (byte 10 / \n)
+fed_char = vim.api.nvim_replace_termcodes("<C-j>", true, true, true)
 res = vim.fn.getcharstr()
-assert_eq(res, "\x1c", "Toggle key should be intercepted and return ignore character")
+assert_eq(res, "\x1c", "Derived toggle key should be intercepted and return ignore character")
 assert_true(mock.is_enabled, "Skkeleton should be enabled after toggle keypress")
 
 -- Case C: Skkeleton enabled, printable key
@@ -559,37 +531,6 @@ fed_char = "\x07"
 res = vim.fn.getcharstr()
 assert_eq(res, "\x07", "Ctrl-g without marker should pass through directly")
 assert_eq(#mock.handle_calls, 0, "Should NOT route Ctrl-g to skkeleton when no marker")
-
--- Case K: Stateful Initialization (default_mode != eisu)
--- Simulate first getcharstr call after setup
-mock.is_enabled = false
-mock.enabled_count = 0
-mock.handle_calls = {}
-
--- Re-setup with default_mode = henkan
-package.loaded["skkeleton-pickers"] = nil
-local picker_henkan = require("skkeleton-pickers")
-picker_henkan.setup({
-    mini_pick = true,
-    toggle_key = "<C-j>",
-    default_mode = "henkan",
-})
-
-_G.MiniPick.active_picker.query = { "a" }
-fed_char = "b" -- first user typed character
-
-res = vim.fn.getcharstr()
--- The first call should have triggered:
--- 1. call_skk_handle("enable", {})
--- 2. call_skk_handle("handleKey", { key = {""}, function = "hirakana" })
--- 3. Then processed the user typed character "b" (since skkeleton is now enabled, "b" is routed to skkeleton)
-assert_eq(res, "\x1c", "User typed key should be intercepted")
-assert_true(#mock.handle_calls >= 2, "Should initialize skkeleton and set mode on first getcharstr")
--- First call should be enable
-assert_eq(mock.handle_calls[1].func, "enable", "Should call enable first")
--- Second call should be setting default mode
-assert_eq(mock.handle_calls[2].func, "handleKey", "Should call handleKey for mode")
-assert_eq(mock.handle_calls[2].opts["function"], "hirakana", "Should set to hirakana")
 
 -- Restore original getcharstr to clean up the test environment
 vim.fn.getcharstr = orig_fn_getcharstr

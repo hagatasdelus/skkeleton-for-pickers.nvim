@@ -1,12 +1,14 @@
 local M = {}
 
 M.default_config = {
-    telescope = false,
-    snacks = false,
-    mini_pick = false,
-    filetypes = {},
-    default_mode = "eisu",
-    toggle_key = "<C-j>",
+    pickers = {
+        telescope = {
+            enabled = false,
+        },
+        mini_pick = {
+            enabled = false,
+        },
+    },
 }
 
 M.options = {}

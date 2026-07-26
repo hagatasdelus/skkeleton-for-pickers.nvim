@@ -12,21 +12,19 @@ function M.setup(opts)
     M.config = config.options
 
     buffer.active_fts = {}
-    for _, ft in ipairs(M.config.filetypes or {}) do
-        table.insert(buffer.active_fts, ft)
-    end
-    if M.config.telescope then
+    local pickers = (M.config and M.config.pickers) or {}
+    local is_telescope_enabled = pickers.telescope and pickers.telescope.enabled
+    local is_minipick_enabled = pickers.mini_pick and pickers.mini_pick.enabled
+
+    if is_telescope_enabled then
         table.insert(buffer.active_fts, "TelescopePrompt")
     end
-    if M.config.snacks then
-        table.insert(buffer.active_fts, "snacks_picker_input")
-    end
-    if M.config.mini_pick then
+    if is_minipick_enabled then
         table.insert(buffer.active_fts, "minipick")
     end
 
     local group = nil
-    if #buffer.active_fts > 0 or M.config.mini_pick then
+    if #buffer.active_fts > 0 or is_minipick_enabled then
         group = vim.api.nvim_create_augroup("SkkeletonPickers", { clear = true })
     end
 
@@ -52,7 +50,7 @@ function M.setup(opts)
     end
 
     -- Set up mini.pick autocommands and getcharstr monkeypatch for mini.pick support
-    if M.config.mini_pick then
+    if is_minipick_enabled then
         vim.api.nvim_create_autocmd("User", {
             pattern = "MiniPickStart",
             group = group,

@@ -28,7 +28,7 @@ Features: ~
 - Safe <CR> Forwarding: Enter key confirms active preedit character, but
   selects/opens items on empty preedit text.
 - Dynamic Marker Support: Tracks skkeleton configuration markers dynamically.
-- Out-of-the-box support for Telescope, Snacks.picker, and mini.pick.
+- Out-of-the-box support for Telescope and mini.pick.
 
 ==============================================================================
 REQUIREMENTS						*skkeleton-pickers-requirements*
@@ -46,7 +46,11 @@ Using lazy.nvim: >lua
     "hagatasdelus/skkeleton-pickers.nvim",
     dependencies = { "vim-skk/skkeleton" },
     config = function()
-      require("skkeleton-pickers").setup({})
+      require("skkeleton-pickers").setup({
+        pickers = {
+          telescope = { enabled = true },
+        },
+      })
     end
   }
 <
@@ -57,7 +61,11 @@ Using mini.deps: >lua
     source = 'hagatasdelus/skkeleton-pickers.nvim',
     depends = { 'vim-skk/skkeleton' },
   })
-  require('skkeleton-pickers').setup({})
+  require('skkeleton-pickers').setup({
+    pickers = {
+      telescope = { enabled = true },
+    },
+  })
 <
 Using vim.pack (Neovim 0.12+): >lua
 
@@ -65,32 +73,26 @@ Using vim.pack (Neovim 0.12+): >lua
     source = "hagatasdelus/skkeleton-pickers.nvim",
     depends = { "vim-skk/skkeleton" },
   })
-  require("skkeleton-pickers").setup({})
+  require("skkeleton-pickers").setup({
+    pickers = {
+      telescope = { enabled = true },
+    },
+  })
 <
 
 ==============================================================================
 CONFIGURATION						*skkeleton-pickers-configuration*
 
-Note: All pickers are disabled by default (false). You must explicitly enable
-each picker in setup().
+Note: All pickers are disabled by default (`enabled = false`). You must
+explicitly enable each picker in setup().
 
 Customize options inside setup(): >lua
 
   require("skkeleton-pickers").setup({
-    -- Enable/disable integration for specific fuzzy finders (Default: false)
-    telescope = false,
-    snacks = false,
-    mini_pick = false,
-
-    -- Additional filetypes of custom buffers where you want to enable this integration
-    filetypes = {},
-
-    -- The default SKK mode applied when entering the prompt (Default: "eisu").
-    -- Can be "henkan" (Hiragana), "zenkaku" (Zenkaku Eisu), "eisu" (Direct input), or "katakana" (Katakana)
-    default_mode = "eisu",
-
-    -- Key to toggle skkeleton (Default: "<C-j>")
-    toggle_key = "<C-j>",
+    pickers = {
+      telescope = { enabled = false },
+      mini_pick = { enabled = false },
+    },
   })
 <
 

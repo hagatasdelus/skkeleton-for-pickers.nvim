@@ -222,7 +222,7 @@ function M.route_key_to_skk(char)
 
     if routed_key == "\x1b" then
         if skk.has_skkeleton_marker() then
-            local result = skk.call_skk_handle("handleKey", { key = char, expr = true })
+            local result = skk.call_skk_handle("handleKey", { key = "\x07", expr = true })
             M.process_skk_result(result)
             M.is_routing_skk = false
             return IGNORE_CHAR

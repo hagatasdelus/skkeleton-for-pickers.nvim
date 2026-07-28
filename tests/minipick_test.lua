@@ -246,7 +246,7 @@ fed_char = "\x1b"
 res = vim.fn.getcharstr()
 assert_eq(res, "\x1c", "Esc with marker should be intercepted")
 assert_eq(#mock.handle_calls, 1, "Should route Esc to skkeleton")
-assert_eq(mock.handle_calls[1].opts.key[1], "\x1b", "Should pass Esc")
+assert_eq(mock.handle_calls[1].opts.key[1], "\x07", "Should pass cancel (Ctrl-g) key to skkeleton")
 
 -- Case H: Esc without marker
 mock.is_enabled = true
@@ -638,6 +638,40 @@ assert_eq(#passed_query_to_custom_match, 3, "Marker characters should be strippe
 assert_eq(passed_query_to_custom_match[1], "て", "First char should be 'て'")
 assert_eq(passed_query_to_custom_match[2], "s", "Second char")
 assert_eq(passed_query_to_custom_match[3], "u", "Third char")
+
+-- Case W: Esc with empty markers in henkan state
+reset_mock()
+mock.is_enabled = true
+mock.config = { markerHenkan = "", markerHenkanSelect = "" }
+_G.MiniPick.active_picker.query = { "せ", "い", "せ", "い" }
+vim.g["skkeleton#state"] = { phase = "input:okurinasi", henkanFeed = "せいせい" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Esc with empty markers in henkan state should cancel henkan and return ignore char")
+assert_eq(mock.disabled_count, 0, "Skkeleton should not be disabled on Esc during henkan")
+assert_true(#mock.handle_calls > 0 and mock.handle_calls[1].opts.key[1] == "\x07", "Esc during henkan should send cancel (Ctrl-g) key to skkeleton")
+
+-- Case X: Esc with empty markers in non-henkan state
+reset_mock()
+mock.is_enabled = true
+mock.config = { markerHenkan = "", markerHenkanSelect = "" }
+_G.MiniPick.active_picker.query = { "あ" }
+vim.g["skkeleton#state"] = { phase = "input", henkanFeed = "" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1b", "Esc with empty markers in non-henkan state should return Esc")
+assert_eq(mock.disabled_count, 1, "Skkeleton should be disabled on Esc in non-henkan state")
+
+-- Case Y: Esc with default markers in henkan state
+reset_mock()
+mock.is_enabled = true
+mock.config = { markerHenkan = "▽", markerHenkanSelect = "▼" }
+_G.MiniPick.active_picker.query = { "▽", "せ", "い", "せ", "い" }
+vim.g["skkeleton#state"] = { phase = "input:okurinasi", henkanFeed = "せいせい" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Esc with default markers in henkan state should cancel henkan and return ignore char")
+assert_eq(mock.disabled_count, 0, "Skkeleton should not be disabled on Esc during henkan with default markers")
 
 -- Simulate MiniPickStop event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })

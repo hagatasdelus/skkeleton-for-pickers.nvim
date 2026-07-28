@@ -41,14 +41,32 @@ function M.has_skkeleton_marker()
     if pick_active then
         local query = MiniPick.get_picker_query()
         local query_str = table.concat(query)
-        return (query_str:find(marker_henkan, 1, true) ~= nil) or (query_str:find(marker_henkan_select, 1, true) ~= nil)
+        if (marker_henkan ~= "" and query_str:find(marker_henkan, 1, true) ~= nil) or
+           (marker_henkan_select ~= "" and query_str:find(marker_henkan_select, 1, true) ~= nil) then
+            return true
+        end
+    else
+        local ok_line, line = pcall(vim.api.nvim_get_current_line)
+        if ok_line and line then
+            if (marker_henkan ~= "" and line:find(marker_henkan, 1, true) ~= nil) or
+               (marker_henkan_select ~= "" and line:find(marker_henkan_select, 1, true) ~= nil) then
+                return true
+            end
+        end
     end
 
-    local ok_line, line = pcall(vim.api.nvim_get_current_line)
-    if not ok_line or not line then
-        return false
+    -- Check skkeleton internal state via vim.g["skkeleton#state"]
+    local state = vim.g["skkeleton#state"]
+    if type(state) == "table" then
+        if state.henkanFeed and state.henkanFeed ~= "" then
+            return true
+        end
+        if state.phase and (state.phase == "henkan" or state.phase == "input:okurinasi" or state.phase == "input:okuriari") then
+            return true
+        end
     end
-    return (line:find(marker_henkan, 1, true) ~= nil) or (line:find(marker_henkan_select, 1, true) ~= nil)
+
+    return false
 end
 
 function M.call_skk_handle(func, opts)

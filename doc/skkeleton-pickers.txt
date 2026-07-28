@@ -97,4 +97,14 @@ Customize options inside setup(): >lua
 <
 
 ==============================================================================
+NOTES							*skkeleton-pickers-notes*
+
+Escape key (<Esc>) handling in mini.pick: ~
+In mini.pick integration, pressing <Esc> during henkan or input state internal-
+ly routes \x07 (<C-g>) to skkeleton instead of \x1b to prevent skkeleton from
+being disabled and to properly cancel active preedit text.
+* Note: Future updates or specification changes in skkeleton or mini.pick
+  may alter or deprecate this cancel routing behavior.
+
+==============================================================================
 vim:tw=78:ts=8:ft=help:norl:

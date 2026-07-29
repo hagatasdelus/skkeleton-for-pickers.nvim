@@ -67,6 +67,18 @@ vim.fn["skkeleton#get_config"] = function()
     return mock.config
 end
 
+vim.fn["skkeleton#map"] = function()
+    local buf = vim.api.nvim_get_current_buf()
+    vim.keymap.set("i", "a", "<Cmd>call skkeleton#handle('handleKey', {'key': 'a'})<CR>", { buffer = buf })
+    vim.keymap.set("i", "i", "<Cmd>call skkeleton#handle('handleKey', {'key': 'i'})<CR>", { buffer = buf })
+end
+
+vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"] = function()
+    local buf = vim.api.nvim_get_current_buf()
+    pcall(vim.keymap.del, "i", "a", { buffer = buf })
+    pcall(vim.keymap.del, "i", "i", { buffer = buf })
+end
+
 vim.fn["denops#request"] = function(plugin, method, args)
     if plugin == "skkeleton" and method == "handle" then
         local func = args[1]
@@ -75,6 +87,8 @@ vim.fn["denops#request"] = function(plugin, method, args)
         if func == "enable" then
             mock.enabled_count = mock.enabled_count + 1
             mock.is_enabled = true
+            vim.fn["skkeleton#map"]()
+            vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-enable-post" })
         elseif func == "disable" then
             mock.disabled_count = mock.disabled_count + 1
             mock.is_enabled = false
@@ -160,9 +174,9 @@ function _G.MiniPick.set_picker_query(query)
 end
 
 picker_new.setup({
-    mini_pick = true,
-    toggle_key = "<C-j>",
-    default_mode = "eisu",
+    pickers = {
+        mini_pick = { enabled = true },
+    },
 })
 
 -- Verify getcharstr is NOT patched immediately after setup
@@ -181,11 +195,12 @@ fed_char = "b"
 local res = vim.fn.getcharstr()
 assert_eq(res, "b", "Keys should pass through to mini.pick when skkeleton is disabled")
 
--- Case B: Toggle key
+-- Case B: Derived toggle key handling
+vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
 mock.is_enabled = false
-fed_char = "\n"
+fed_char = "\n" -- <C-j>
 res = vim.fn.getcharstr()
-assert_eq(res, "\x1c", "Toggle key should return ignore character")
+assert_eq(res, "\x1c", "Derived toggle key should return ignore character")
 assert_true(mock.is_enabled, "Skkeleton should be enabled after toggle keypress")
 
 -- Case C: Skkeleton enabled, printable key
@@ -245,7 +260,7 @@ fed_char = "\x1b"
 res = vim.fn.getcharstr()
 assert_eq(res, "\x1c", "Esc with marker should be intercepted")
 assert_eq(#mock.handle_calls, 1, "Should route Esc to skkeleton")
-assert_eq(mock.handle_calls[1].opts.key[1], "\x1b", "Should pass Esc")
+assert_eq(mock.handle_calls[1].opts.key[1], "\x07", "Should pass cancel (Ctrl-g) key to skkeleton")
 
 -- Case H: Esc without marker
 mock.is_enabled = true
@@ -276,45 +291,6 @@ fed_char = "\x07"
 res = vim.fn.getcharstr()
 assert_eq(res, "\x07", "Ctrl-g without marker should pass through")
 
--- Case K: Stateful Initialization
-mock.is_enabled = false
-mock.enabled_count = 0
-mock.handle_calls = {}
-
--- Restore patch before reload to prevent memory leak / infinite recursion
-vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
-
-vim.fn.getcharstr = orig_fn_getcharstr
-_G.skkeleton_pickers_minipick_patched = nil
-orig_fn_getcharstr = function()
-    return fed_char
-end
-vim.fn.getcharstr = orig_fn_getcharstr
-
-package.loaded["skkeleton-pickers"] = nil
-package.loaded["skkeleton-pickers.config"] = nil
-package.loaded["skkeleton-pickers.buffer"] = nil
-package.loaded["skkeleton-pickers.skk"] = nil
-package.loaded["skkeleton-pickers.minipick"] = nil
-local picker_henkan = require("skkeleton-pickers")
-picker_henkan.setup({
-    mini_pick = true,
-    toggle_key = "<C-j>",
-    default_mode = "henkan",
-})
-
--- Simulate MiniPickStart event
-vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
-
-_G.MiniPick.active_picker.query = { "a" }
-fed_char = "b"
-res = vim.fn.getcharstr()
-assert_eq(res, "\x1c", "User typed key should be intercepted")
-assert_true(#mock.handle_calls >= 2, "Should initialize skkeleton on first getcharstr")
-assert_eq(mock.handle_calls[1].func, "enable", "Should call enable first")
-assert_eq(mock.handle_calls[2].func, "handleKey", "Should call handleKey for mode")
-assert_eq(mock.handle_calls[2].opts["function"], "hirakana", "Should set to hirakana")
-
 -- Case L: process_skk_result backspace safety
 -- When result contains \8 but preedit was active (▽u), backspaces erase old preedit, not confirmed text
 -- First stop the picker to clean up current patch
@@ -341,7 +317,12 @@ end
 
 mock.preedit = ""
 -- Mock a backspace-led confirmed result
-picker_henkan.setup({ mini_pick = true })
+picker_henkan = require("skkeleton-pickers")
+picker_henkan.setup({
+    pickers = {
+        mini_pick = { enabled = true },
+    },
+})
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
 -- Set prev_preedit to the old preedit that backspaces target
 package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽u"
@@ -361,19 +342,12 @@ assert_eq(final_q[1], "あ", "First char should be 'あ'")
 assert_eq(final_q[2], "い", "Second char should be 'い'")
 assert_eq(final_q[3], "う", "Third char should be 'う'")
 
--- Case M: setup_buffer toggle key wrapper when enabled
+-- Case M: setup_buffer does not create plugin-level toggle keymaps
 local buf_toggle = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(buf_toggle, "TestTelescopePromptToggle")
 vim.bo[buf_toggle].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf_toggle)
 
--- Set is_enabled after all BufLeave autocmds have executed and disabled skkeleton
-mock.is_enabled = true
-
--- Clear any locally mapped <C-j> created by the autocmds
-pcall(vim.keymap.del, "i", "<C-j>", { buffer = buf_toggle })
-
--- Trigger setup_buffer when enabled
 package.loaded["skkeleton-pickers.buffer"].setup_buffer()
 local toggle_maps = vim.api.nvim_buf_get_keymap(buf_toggle, "i")
 local found_custom_toggle = false
@@ -382,7 +356,7 @@ for _, m in ipairs(toggle_maps) do
         found_custom_toggle = true
     end
 end
-assert_true(not found_custom_toggle, "Toggle key should not be mapped locally when skkeleton is enabled")
+assert_true(not found_custom_toggle, "Toggle keymap should not be mapped by setup_buffer")
 
 -- Case N: process_skk_result duplicate key elimination during preedit transition
 -- When result contains "▽k" and getPreEdit returns "▽k", it must not duplicate "k" in the query
@@ -678,6 +652,110 @@ assert_eq(#passed_query_to_custom_match, 3, "Marker characters should be strippe
 assert_eq(passed_query_to_custom_match[1], "て", "First char should be 'て'")
 assert_eq(passed_query_to_custom_match[2], "s", "Second char")
 assert_eq(passed_query_to_custom_match[3], "u", "Third char")
+
+-- Case W: Esc with empty markers in henkan state
+reset_mock()
+mock.is_enabled = true
+mock.config = { markerHenkan = "", markerHenkanSelect = "" }
+_G.MiniPick.active_picker.query = { "せ", "い", "せ", "い" }
+vim.g["skkeleton#state"] = { phase = "input:okurinasi", henkanFeed = "せいせい" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Esc with empty markers in henkan state should cancel henkan and return ignore char")
+assert_eq(mock.disabled_count, 0, "Skkeleton should not be disabled on Esc during henkan")
+assert_true(#mock.handle_calls > 0 and mock.handle_calls[1].opts.key[1] == "\x07", "Esc during henkan should send cancel (Ctrl-g) key to skkeleton")
+
+-- Case X: Esc with empty markers in non-henkan state
+reset_mock()
+mock.is_enabled = true
+mock.config = { markerHenkan = "", markerHenkanSelect = "" }
+_G.MiniPick.active_picker.query = { "あ" }
+vim.g["skkeleton#state"] = { phase = "input", henkanFeed = "" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1b", "Esc with empty markers in non-henkan state should return Esc")
+assert_eq(mock.disabled_count, 1, "Skkeleton should be disabled on Esc in non-henkan state")
+
+-- Case Y: Esc with default markers in henkan state
+reset_mock()
+mock.is_enabled = true
+mock.config = { markerHenkan = "▽", markerHenkanSelect = "▼" }
+_G.MiniPick.active_picker.query = { "▽", "せ", "い", "せ", "い" }
+vim.g["skkeleton#state"] = { phase = "input:okurinasi", henkanFeed = "せいせい" }
+fed_char = "\x1b"
+res = vim.fn.getcharstr()
+assert_eq(res, "\x1c", "Esc with default markers in henkan state should cancel henkan and return ignore char")
+assert_eq(mock.disabled_count, 0, "Skkeleton should not be disabled on Esc during henkan with default markers")
+
+-- Case Z: Initial keystroke <C-j> toggle and buffer-local keymap clearing
+reset_mock()
+mock.is_enabled = false
+vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
+package.loaded["skkeleton-pickers.minipick"].restore_patch()
+_G.skkeleton_pickers_minipick_patched = nil
+
+local buf_z = vim.api.nvim_create_buf(false, true)
+vim.bo[buf_z].filetype = "minipick"
+vim.api.nvim_set_current_buf(buf_z)
+
+package.loaded["skkeleton-pickers"].setup({
+    pickers = {
+        mini_pick = { enabled = true },
+    },
+})
+
+-- 1st keystroke: <C-j> (\n) -> toggles skkeleton to enabled
+fed_char = "\n"
+local res_z1 = vim.fn.getcharstr()
+assert_eq(res_z1, "\x1c", "First keystroke <C-j> should be intercepted as toggle key")
+assert_true(mock.is_enabled, "Skkeleton should be enabled after first keystroke <C-j>")
+
+-- Verify buffer-local keymaps created by skkeleton#map are cleared for minipick prompt
+local buf_maps_z = vim.api.nvim_buf_get_keymap(buf_z, "i")
+local has_skk_buf_map = false
+for _, m in ipairs(buf_maps_z) do
+    if m.rhs:find("skkeleton") then
+        has_skk_buf_map = true
+    end
+end
+assert_true(not has_skk_buf_map, "Buffer-local skkeleton keymaps should be cleared in minipick prompt to prevent getcharstr conflict")
+
+-- 2nd keystroke: 'i' -> routed to skkeleton and converts to 'い'
+mock.handle_calls = {}
+mock.handle_return = "\bい"
+_G.MiniPick.active_picker.query = {}
+fed_char = "i"
+local res_z2 = vim.fn.getcharstr()
+assert_eq(res_z2, "\x1c", "Second key 'i' should be routed to skkeleton")
+assert_eq(#mock.handle_calls, 1, "Should call skkeleton handleKey for 'i'")
+
+-- Case AA: Pressing skkeleton-enable when already enabled should NOT disable skkeleton
+vim.keymap.set("i", "<C-e>", "<Plug>(skkeleton-enable)", { noremap = true })
+mock.is_enabled = true
+mock.disabled_count = 0
+fed_char = vim.api.nvim_replace_termcodes("<C-e>", true, true, true)
+local res_aa = vim.fn.getcharstr()
+assert_eq(res_aa, "\x1c", "skkeleton-enable key should be intercepted")
+assert_true(mock.is_enabled, "Skkeleton should remain enabled when pressing skkeleton-enable key")
+-- Case BB: Direct skkeleton#disable() keymaps should be classified as disable action
+vim.keymap.set("i", "<C-d>", "<Cmd>call skkeleton#disable()<CR>", { noremap = true })
+mock.is_enabled = true
+mock.disabled_count = 0
+fed_char = vim.api.nvim_replace_termcodes("<C-d>", true, true, true)
+local res_bb = vim.fn.getcharstr()
+assert_eq(res_bb, "\x1c", "skkeleton#disable key should be intercepted")
+assert_eq(mock.disabled_count, 1, "Skkeleton should be disabled when pressing skkeleton#disable key")
+
+-- Case CC: skkeleton#handle('handleKey', ...) should NOT be treated as a toggle keymap
+vim.keymap.set("i", "<C-k>", "<Cmd>call skkeleton#handle('handleKey', {'key': 'a'})<CR>", { noremap = true })
+local keymaps_cc = require("skkeleton-pickers.skk").get_skkeleton_keymaps("i")
+local found_handle_keymap = false
+for _, km in ipairs(keymaps_cc) do
+    if km.lhs:upper() == "<C-K>" then
+        found_handle_keymap = true
+    end
+end
+assert_true(not found_handle_keymap, "skkeleton#handle('handleKey', ...) mapping should be excluded from toggle derivation")
 
 -- Simulate MiniPickStop event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })

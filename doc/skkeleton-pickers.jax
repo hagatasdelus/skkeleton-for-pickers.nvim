@@ -10,6 +10,7 @@ License: MIT
 必要要件						|skkeleton-pickers-requirements|
 インストール						|skkeleton-pickers-installation|
 設定							|skkeleton-pickers-configuration|
+補足・注意点						|skkeleton-pickers-notes|
 
 ==============================================================================
 はじめに						*skkeleton-pickers-introduction*
@@ -24,18 +25,19 @@ skkeleton-pickers.nvim は、Neovim の主要な Fuzzy Finder（ファジーフ�
 
 主な機能: ~
 
-- シームレスな入力体験: ピッカーの起動時に自動的に SKK モードを有効化。
+- シームレスな入力体験: ユーザー個人の skkeleton トグルキーマップ（例: `<C-j>`）
+  を Insert / Normal モードから動的に自動探索し、プロンプト内でもシームレスに
+  切り替え可能。
 - 安全な <CR> (Enter) の移譲: 変換未確定の文字列がある場合は skkeleton の確定
   (Kakutei) を行い、未確定文字列がない場合は本来の決定処理を実行。
 - 動的なマーカー追従: skkeleton の `markerHenkan` や `markerHenkanSelect` 設定
   を動的に読み込み、どのようなマーカーを設定していても完璧に動作。
-- Telescope、Snacks.picker、および mini.pick をサポート。
+- Telescope および mini.pick をサポート。
 
 ==============================================================================
 必要要件						*skkeleton-pickers-requirements*
 
-- Neovim >= 0.11.0 (組み込みパッケージマネージャ vim.pack を使用する場合は
-  Neovim >= 0.12.0)
+- Neovim >= 0.10.0
 - vim-denops/denops.vim (https://github.com/vim-denops/denops.vim)
 - vim-skk/skkeleton (https://github.com/vim-skk/skkeleton)
 
@@ -48,7 +50,12 @@ lazy.nvim の場合: >lua
     "hagatasdelus/skkeleton-pickers.nvim",
     dependencies = { "vim-skk/skkeleton" },
     config = function()
-      require("skkeleton-pickers").setup({})
+      require("skkeleton-pickers").setup({
+        pickers = {
+          telescope = { enabled = true },
+          mini_pick = { enabled = true },
+        },
+      })
     end
   }
 <
@@ -59,42 +66,39 @@ mini.deps の場合: >lua
     source = 'hagatasdelus/skkeleton-pickers.nvim',
     depends = { 'vim-skk/skkeleton' },
   })
-  require('skkeleton-pickers').setup({})
-<
-vim.pack の場合 (Neovim 0.12+): >lua
-
-  vim.pack.add({
-    source = "hagatasdelus/skkeleton-pickers.nvim",
-    depends = { "vim-skk/skkeleton" },
+  require('skkeleton-pickers').setup({
+    pickers = {
+      telescope = { enabled = true },
+      mini_pick = { enabled = true },
+    },
   })
-  require("skkeleton-pickers").setup({})
 <
 
 ==============================================================================
 設定							*skkeleton-pickers-configuration*
 
-注意: 各ピッカーはデフォルトで無効 (false) です。利用するには setup() にて
-明示的に有効にする必要があります。
+注意: 各ピッカーはデフォルトで無効 (`enabled = false`) です。利用するには
+setup() にて明示的に有効にする必要があります。
 
 setup() にオプションを渡すことで挙動をカスタマイズできます: >lua
 
   require("skkeleton-pickers").setup({
-    -- 特定のピッカーでのみ有効化したい場合は true に設定 (デフォルトはすべて false)
-    telescope = false,
-    snacks = false,
-    mini_pick = false,
-
-    -- 追加で有効にしたいカスタムバッファの filetype リスト
-    filetypes = {},
-
-    -- 各ファインダーのプロンプトに入った際のデフォルト動作 (デフォルトは "eisu")
-    -- "henkan" (即座にSKK変換モード), "zenkaku" (全角英数), "eisu" (直接入力), "katakana" (カタカナ) などを指定可能
-    default_mode = "eisu",
-
-    -- skkeleton のトグルキー (デフォルトは "<C-j>")
-    toggle_key = "<C-j>",
+    pickers = {
+      telescope = { enabled = true },
+      mini_pick = { enabled = true },
+    },
   })
 <
+
+==============================================================================
+補足・注意点						*skkeleton-pickers-notes*
+
+mini.pick でのエスケープキー (<Esc>) ハンドリングについて: ~
+mini.pick の統合において、変換中および入力中に <Esc> が押された場合、
+skkeleton が無効化されるのを防ぎ未確定入力をキャンセルするために、内部的
+に \x07 (<C-g>) へ変換して skkeleton にルーティングを行っています。
+※今後の skkeleton や mini.pick のバージョンアップ・仕様変更に伴い、この
+  cancel 挙動や内部キー変換が変更または廃止される可能性があります。
 
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:

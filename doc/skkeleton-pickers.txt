@@ -9,6 +9,7 @@ Introduction						|skkeleton-pickers-introduction|
 Requirements						|skkeleton-pickers-requirements|
 Installation						|skkeleton-pickers-installation|
 Configuration						|skkeleton-pickers-configuration|
+Notes							|skkeleton-pickers-notes|
 
 ==============================================================================
 INTRODUCTION						*skkeleton-pickers-introduction*
@@ -23,17 +24,17 @@ Japanese input in fuzzy finders stress-free.
 
 Features: ~
 
-- Seamless Input Experience: Automatically enables SKK mode when entering the
-  prompt window.
+- Seamless Input Experience: Dynamically derives user's personal skkeleton toggle
+  keymaps (e.g. `<C-j>`) to toggle Japanese input seamlessly in prompt buffers.
 - Safe <CR> Forwarding: Enter key confirms active preedit character, but
   selects/opens items on empty preedit text.
 - Dynamic Marker Support: Tracks skkeleton configuration markers dynamically.
-- Out-of-the-box support for Telescope, Snacks.picker, and mini.pick.
+- Out-of-the-box support for Telescope and mini.pick.
 
 ==============================================================================
 REQUIREMENTS						*skkeleton-pickers-requirements*
 
-- Neovim >= 0.11.0 (or Neovim >= 0.12.0 for built-in vim.pack)
+- Neovim >= 0.10.0
 - vim-denops/denops.vim (https://github.com/vim-denops/denops.vim)
 - vim-skk/skkeleton (https://github.com/vim-skk/skkeleton)
 
@@ -46,7 +47,12 @@ Using lazy.nvim: >lua
     "hagatasdelus/skkeleton-pickers.nvim",
     dependencies = { "vim-skk/skkeleton" },
     config = function()
-      require("skkeleton-pickers").setup({})
+      require("skkeleton-pickers").setup({
+        pickers = {
+          telescope = { enabled = true },
+          mini_pick = { enabled = true },
+        },
+      })
     end
   }
 <
@@ -57,42 +63,39 @@ Using mini.deps: >lua
     source = 'hagatasdelus/skkeleton-pickers.nvim',
     depends = { 'vim-skk/skkeleton' },
   })
-  require('skkeleton-pickers').setup({})
-<
-Using vim.pack (Neovim 0.12+): >lua
-
-  vim.pack.add({
-    source = "hagatasdelus/skkeleton-pickers.nvim",
-    depends = { "vim-skk/skkeleton" },
+  require('skkeleton-pickers').setup({
+    pickers = {
+      telescope = { enabled = true },
+      mini_pick = { enabled = true },
+    },
   })
-  require("skkeleton-pickers").setup({})
 <
 
 ==============================================================================
 CONFIGURATION						*skkeleton-pickers-configuration*
 
-Note: All pickers are disabled by default (false). You must explicitly enable
-each picker in setup().
+Note: All pickers are disabled by default (`enabled = false`). You must
+explicitly enable each picker in setup().
 
 Customize options inside setup(): >lua
 
   require("skkeleton-pickers").setup({
-    -- Enable/disable integration for specific fuzzy finders (Default: false)
-    telescope = false,
-    snacks = false,
-    mini_pick = false,
-
-    -- Additional filetypes of custom buffers where you want to enable this integration
-    filetypes = {},
-
-    -- The default SKK mode applied when entering the prompt (Default: "eisu").
-    -- Can be "henkan" (Hiragana), "zenkaku" (Zenkaku Eisu), "eisu" (Direct input), or "katakana" (Katakana)
-    default_mode = "eisu",
-
-    -- Key to toggle skkeleton (Default: "<C-j>")
-    toggle_key = "<C-j>",
+    pickers = {
+      telescope = { enabled = true },
+      mini_pick = { enabled = true },
+    },
   })
 <
+
+==============================================================================
+NOTES							*skkeleton-pickers-notes*
+
+Escape key (<Esc>) handling in mini.pick: ~
+In mini.pick integration, pressing <Esc> during henkan or input state internal-
+ly routes \x07 (<C-g>) to skkeleton instead of \x1b to prevent skkeleton from
+being disabled and to properly cancel active preedit text.
+* Note: Future updates or specification changes in skkeleton or mini.pick
+  may alter or deprecate this cancel routing behavior.
 
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:

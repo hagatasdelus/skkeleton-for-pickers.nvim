@@ -1,6 +1,5 @@
 local M = {}
 
-local config = require("skkeleton-pickers.config")
 local skk = require("skkeleton-pickers.skk")
 
 M.active_fts = {}
@@ -36,29 +35,6 @@ function M.apply_cr_map(buf)
     end, { buffer = buf, silent = true })
 end
 
-function M.apply_default_mode(buf)
-    local default_mode = config.options.default_mode
-    if not default_mode then
-        return
-    end
-
-    if default_mode == "eisu" then
-        pcall(vim.fn["skkeleton#disable"])
-        return
-    end
-
-    local func = skk.MODE_MAP[default_mode]
-    if not func then
-        return
-    end
-
-    local has_skk, is_enabled = pcall(vim.fn["skkeleton#is_enabled"])
-    if has_skk and not is_enabled then
-        pcall(vim.fn["skkeleton#handle"], "enable", {})
-    end
-    pcall(vim.fn["skkeleton#handle"], "handleKey", { key = { "" }, ["function"] = func })
-end
-
 function M.setup_buffer()
     local buf = vim.api.nvim_get_current_buf()
     local ft = vim.bo[buf].filetype
@@ -70,16 +46,21 @@ function M.setup_buffer()
     -- Skip setup for mini.pick prompt buffer since it does not use insert-mode mappings
     -- and we handle its initialization dynamically in the getcharstr patch.
     if ft == "minipick" then
+        require("skkeleton-pickers.minipick").apply_patch()
         return
     end
 
     vim.b[buf].skkeleton = true
 
-    -- Bind toggle key to <Plug>(skkeleton-toggle) in the prompt buffer if skkeleton is not active
+    -- Re-bind user's skkeleton keymaps (Insert and Normal mode) in prompt buffer if skkeleton is not currently active
     local has_skk, is_enabled = pcall(vim.fn["skkeleton#is_enabled"])
     if not (has_skk and is_enabled) then
-        local toggle_key = config.options.toggle_key or "<C-j>"
-        vim.keymap.set("i", toggle_key, "<Plug>(skkeleton-toggle)", { buffer = buf, silent = true })
+        for _, mode in ipairs({ "i", "n" }) do
+            local keymaps = skk.get_skkeleton_keymaps(mode)
+            for _, item in ipairs(keymaps) do
+                vim.keymap.set(mode, item.lhs, item.rhs, { buffer = buf, silent = true, remap = true })
+            end
+        end
     end
 
     -- Wrap CR mapping
@@ -112,12 +93,6 @@ function M.setup_buffer()
             pcall(vim.fn["skkeleton#disable"])
         end,
     })
-
-    -- Apply default mode
-    if not vim.b[buf].skkeleton_pickers_setup then
-        vim.b[buf].skkeleton_pickers_setup = true
-        M.apply_default_mode(buf)
-    end
 end
 
 return M

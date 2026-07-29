@@ -137,6 +137,24 @@ assert_eq(has_minipick, false, "active_fts should NOT contain minipick")
 assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr should not be patched when mini_pick is disabled")
 assert_eq(vim.fn.getcharstr, orig_getcharstr, "getcharstr function pointer should remain unchanged")
 
+-- Test 3: Disabling mini_pick on re-setup restores patch
+print("Running Test 3: Disabling mini_pick on re-setup restores patch...")
+picker_bypass.setup({
+    pickers = {
+        mini_pick = { enabled = true },
+    },
+})
+local minipick_mod = require("skkeleton-pickers.minipick")
+minipick_mod.apply_patch()
+assert_eq(_G.skkeleton_pickers_minipick_patched, true, "getcharstr should be patched when mini_pick is enabled and active")
+
+picker_bypass.setup({
+    pickers = {
+        mini_pick = { enabled = false },
+    },
+})
+assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr patch should be restored when mini_pick is re-disabled")
+
 print(string.format("\nconfig_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then
     os.exit(1)

@@ -23,9 +23,11 @@ function M.setup(opts)
         table.insert(buffer.active_fts, "minipick")
     end
 
-    local group = nil
-    if #buffer.active_fts > 0 or is_minipick_enabled then
-        group = vim.api.nvim_create_augroup("SkkeletonPickers", { clear = true })
+    -- Always clear/re-create augroup on setup
+    local group = vim.api.nvim_create_augroup("SkkeletonPickers", { clear = true })
+
+    if not is_minipick_enabled then
+        minipick.restore_patch()
     end
 
     if #buffer.active_fts > 0 then
@@ -46,7 +48,7 @@ function M.setup(opts)
                     buffer.apply_cr_map(buf)
                 end
                 local is_minipick_active = _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" and _G.MiniPick.is_picker_active()
-                if is_minipick_enabled and (is_minipick_active or vim.bo[buf].filetype == "minipick") then
+                if is_minipick_enabled and is_minipick_active and vim.bo[buf].filetype == "minipick" then
                     pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
                 end
             end,

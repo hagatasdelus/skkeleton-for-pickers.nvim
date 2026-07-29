@@ -729,6 +729,16 @@ local res_z2 = vim.fn.getcharstr()
 assert_eq(res_z2, "\x1c", "Second key 'i' should be routed to skkeleton")
 assert_eq(#mock.handle_calls, 1, "Should call skkeleton handleKey for 'i'")
 
+-- Case AA: Pressing skkeleton-enable when already enabled should NOT disable skkeleton
+vim.keymap.set("i", "<C-e>", "<Plug>(skkeleton-enable)", { noremap = true })
+mock.is_enabled = true
+mock.disabled_count = 0
+fed_char = vim.api.nvim_replace_termcodes("<C-e>", true, true, true)
+local res_aa = vim.fn.getcharstr()
+assert_eq(res_aa, "\x1c", "skkeleton-enable key should be intercepted")
+assert_true(mock.is_enabled, "Skkeleton should remain enabled when pressing skkeleton-enable key")
+assert_eq(mock.disabled_count, 0, "Skkeleton should NOT be disabled when pressing skkeleton-enable key")
+
 -- Simulate MiniPickStop event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
 

@@ -302,19 +302,33 @@ function M.wrap_active_picker_opts()
 end
 
 -- Process the toggle keypress to enable/disable skkeleton
-function M.handle_toggle_key()
+function M.handle_toggle_key(action)
+    action = action or "toggle"
     local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
     if not ok_skk then
         return IGNORE_CHAR
     end
 
-    if skk_enabled then
-        pcall(vim.fn["skkeleton#disable"])
+    local should_enable = false
+    if action == "enable" then
+        should_enable = true
+    elseif action == "disable" then
+        should_enable = false
     else
-        M.is_routing_skk = true
-        skk.call_skk_handle("enable", { expr = true })
-        pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
-        M.is_routing_skk = false
+        should_enable = not skk_enabled
+    end
+
+    if should_enable then
+        if not skk_enabled then
+            M.is_routing_skk = true
+            skk.call_skk_handle("enable", { expr = true })
+            pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
+            M.is_routing_skk = false
+        end
+    else
+        if skk_enabled then
+            pcall(vim.fn["skkeleton#disable"])
+        end
     end
     return IGNORE_CHAR
 end
@@ -331,7 +345,7 @@ function M.handle_picker_char(char)
     local keymaps = skk.get_skkeleton_keymaps("i")
     for _, item in ipairs(keymaps) do
         if char == item.raw then
-            return M.handle_toggle_key()
+            return M.handle_toggle_key(item.action)
         end
     end
 

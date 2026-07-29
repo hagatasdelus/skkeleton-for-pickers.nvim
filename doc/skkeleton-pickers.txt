@@ -9,6 +9,7 @@ Introduction						|skkeleton-pickers-introduction|
 Requirements						|skkeleton-pickers-requirements|
 Installation						|skkeleton-pickers-installation|
 Configuration						|skkeleton-pickers-configuration|
+Notes							|skkeleton-pickers-notes|
 
 ==============================================================================
 INTRODUCTION						*skkeleton-pickers-introduction*
@@ -23,8 +24,8 @@ Japanese input in fuzzy finders stress-free.
 
 Features: ~
 
-- Seamless Input Experience: Automatically enables SKK mode when entering the
-  prompt window.
+- Seamless Input Experience: Dynamically derives user's personal skkeleton toggle
+  keymaps (e.g. `<C-j>`) to toggle Japanese input seamlessly in prompt buffers.
 - Safe <CR> Forwarding: Enter key confirms active preedit character, but
   selects/opens items on empty preedit text.
 - Dynamic Marker Support: Tracks skkeleton configuration markers dynamically.
@@ -33,7 +34,7 @@ Features: ~
 ==============================================================================
 REQUIREMENTS						*skkeleton-pickers-requirements*
 
-- Neovim >= 0.11.0 (or Neovim >= 0.12.0 for built-in vim.pack)
+- Neovim >= 0.10.0
 - vim-denops/denops.vim (https://github.com/vim-denops/denops.vim)
 - vim-skk/skkeleton (https://github.com/vim-skk/skkeleton)
 
@@ -49,6 +50,7 @@ Using lazy.nvim: >lua
       require("skkeleton-pickers").setup({
         pickers = {
           telescope = { enabled = true },
+          mini_pick = { enabled = true },
         },
       })
     end
@@ -64,18 +66,7 @@ Using mini.deps: >lua
   require('skkeleton-pickers').setup({
     pickers = {
       telescope = { enabled = true },
-    },
-  })
-<
-Using vim.pack (Neovim 0.12+): >lua
-
-  vim.pack.add({
-    source = "hagatasdelus/skkeleton-pickers.nvim",
-    depends = { "vim-skk/skkeleton" },
-  })
-  require("skkeleton-pickers").setup({
-    pickers = {
-      telescope = { enabled = true },
+      mini_pick = { enabled = true },
     },
   })
 <
@@ -90,8 +81,8 @@ Customize options inside setup(): >lua
 
   require("skkeleton-pickers").setup({
     pickers = {
-      telescope = { enabled = false },
-      mini_pick = { enabled = false },
+      telescope = { enabled = true },
+      mini_pick = { enabled = true },
     },
   })
 <

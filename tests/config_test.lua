@@ -155,6 +155,24 @@ picker_bypass.setup({
 })
 assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr patch should be restored when mini_pick is re-disabled")
 
+-- Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers
+print("Running Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers...")
+reset_mock()
+mock.is_enabled = true
+local normal_buf = vim.api.nvim_create_buf(false, true)
+vim.bo[normal_buf].filetype = "markdown"
+vim.api.nvim_set_current_buf(normal_buf)
+
+picker_bypass.setup({
+    pickers = {
+        telescope = { enabled = true },
+        mini_pick = { enabled = false },
+    },
+})
+
+assert_eq(mock.is_enabled, true, "skkeleton should remain enabled in normal buffer when running setup with mini_pick disabled")
+assert_eq(mock.disabled_count, 0, "skkeleton#disable should NOT be called in normal buffer during setup")
+
 print(string.format("\nconfig_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then
     os.exit(1)

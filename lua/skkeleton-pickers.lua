@@ -27,7 +27,11 @@ function M.setup(opts)
     local group = vim.api.nvim_create_augroup("SkkeletonPickers", { clear = true })
 
     if not is_minipick_enabled then
-        pcall(vim.fn["skkeleton#disable"])
+        local is_minipick_active = _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" and _G.MiniPick.is_picker_active()
+        local buf = vim.api.nvim_get_current_buf()
+        if is_minipick_active and vim.bo[buf].filetype == "minipick" then
+            pcall(vim.fn["skkeleton#disable"])
+        end
         minipick.restore_patch()
     end
 

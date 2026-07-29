@@ -46,6 +46,7 @@ function M.setup_buffer()
     -- Skip setup for mini.pick prompt buffer since it does not use insert-mode mappings
     -- and we handle its initialization dynamically in the getcharstr patch.
     if ft == "minipick" then
+        require("skkeleton-pickers.minipick").apply_patch()
         return
     end
 

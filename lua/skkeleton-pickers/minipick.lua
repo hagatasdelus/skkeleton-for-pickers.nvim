@@ -313,6 +313,7 @@ function M.handle_toggle_key()
     else
         M.is_routing_skk = true
         skk.call_skk_handle("enable", { expr = true })
+        pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
         M.is_routing_skk = false
     end
     return IGNORE_CHAR

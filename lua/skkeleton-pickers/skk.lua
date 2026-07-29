@@ -15,6 +15,11 @@ function M.get_skkeleton_keymaps(mode)
     mode = mode or "i"
     local keys = {}
     local maps = vim.api.nvim_get_keymap(mode)
+    local ok_buf_maps, buf_maps = pcall(vim.api.nvim_buf_get_keymap, 0, mode)
+    if ok_buf_maps and type(buf_maps) == "table" then
+        vim.list_extend(maps, buf_maps)
+    end
+
     for _, map in ipairs(maps) do
         local rhs = map.rhs or ""
         if rhs:find("<Plug>%(skkeleton%-") or rhs:find("skkeleton#handle") or rhs:find("skkeleton#enable") then

@@ -29,6 +29,7 @@ local mock = {
     is_enabled = false,
     enabled_count = 0,
     disabled_count = 0,
+    cleared_mappings_count = 0,
     handle_calls = {},
     handle_return = "\b\b\b漢字",
     config = {
@@ -36,6 +37,10 @@ local mock = {
         markerHenkanSelect = "▼",
     },
 }
+
+vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"] = function()
+    mock.cleared_mappings_count = mock.cleared_mappings_count + 1
+end
 
 vim.fn["skkeleton#is_enabled"] = function()
     return mock.is_enabled
@@ -90,6 +95,7 @@ local function reset_mock()
     mock.is_enabled = false
     mock.enabled_count = 0
     mock.disabled_count = 0
+    mock.cleared_mappings_count = 0
     mock.handle_calls = {}
     mock.handle_return = "\b\b\b漢字"
     mock.config = {
@@ -323,6 +329,21 @@ for _, m in ipairs(maps) do
     end
 end
 assert_true(has_cr_map, "CR mapping should be re-applied after skkeleton-enable-post")
+
+-- Test 6: skkeleton-enable-post in normal buffer does NOT clear buffer mappings
+print("Running Test 6: skkeleton-enable-post in normal buffer does NOT clear buffer mappings...")
+reset_mock()
+picker.setup({
+    pickers = {
+        mini_pick = { enabled = true },
+    },
+})
+local buf_normal = vim.api.nvim_create_buf(false, true)
+vim.bo[buf_normal].filetype = "markdown"
+vim.api.nvim_set_current_buf(buf_normal)
+
+vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-enable-post" })
+assert_eq(mock.cleared_mappings_count, 0, "skkeleton-enable-post in normal buffer must NOT clear skkeleton buffer mappings")
 
 print(string.format("\nbuffer_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

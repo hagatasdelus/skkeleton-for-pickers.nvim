@@ -737,7 +737,25 @@ fed_char = vim.api.nvim_replace_termcodes("<C-e>", true, true, true)
 local res_aa = vim.fn.getcharstr()
 assert_eq(res_aa, "\x1c", "skkeleton-enable key should be intercepted")
 assert_true(mock.is_enabled, "Skkeleton should remain enabled when pressing skkeleton-enable key")
-assert_eq(mock.disabled_count, 0, "Skkeleton should NOT be disabled when pressing skkeleton-enable key")
+-- Case BB: Direct skkeleton#disable() keymaps should be classified as disable action
+vim.keymap.set("i", "<C-d>", "<Cmd>call skkeleton#disable()<CR>", { noremap = true })
+mock.is_enabled = true
+mock.disabled_count = 0
+fed_char = vim.api.nvim_replace_termcodes("<C-d>", true, true, true)
+local res_bb = vim.fn.getcharstr()
+assert_eq(res_bb, "\x1c", "skkeleton#disable key should be intercepted")
+assert_eq(mock.disabled_count, 1, "Skkeleton should be disabled when pressing skkeleton#disable key")
+
+-- Case CC: skkeleton#handle('handleKey', ...) should NOT be treated as a toggle keymap
+vim.keymap.set("i", "<C-k>", "<Cmd>call skkeleton#handle('handleKey', {'key': 'a'})<CR>", { noremap = true })
+local keymaps_cc = require("skkeleton-pickers.skk").get_skkeleton_keymaps("i")
+local found_handle_keymap = false
+for _, km in ipairs(keymaps_cc) do
+    if km.lhs:upper() == "<C-K>" then
+        found_handle_keymap = true
+    end
+end
+assert_true(not found_handle_keymap, "skkeleton#handle('handleKey', ...) mapping should be excluded from toggle derivation")
 
 -- Simulate MiniPickStop event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })

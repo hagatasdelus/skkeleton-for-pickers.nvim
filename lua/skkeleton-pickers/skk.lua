@@ -22,13 +22,16 @@ function M.get_skkeleton_keymaps(mode)
 
     for _, map in ipairs(maps) do
         local rhs = map.rhs or ""
-        if rhs:find("<Plug>%(skkeleton%-") or rhs:find("skkeleton#handle") or rhs:find("skkeleton#enable") then
+        local is_skk_action = rhs:find("<Plug>%(skkeleton%-") or rhs:find("skkeleton#enable") or rhs:find("skkeleton#disable") or rhs:find("skkeleton#toggle")
+        if is_skk_action then
             local raw_key = vim.api.nvim_replace_termcodes(map.lhs, true, true, true)
             local action = "toggle"
-            if rhs:find("skkeleton%-enable") or rhs:find("skkeleton#enable") then
+            if rhs:find("enable") then
                 action = "enable"
-            elseif rhs:find("skkeleton%-disable") or rhs:find("skkeleton#disable") then
+            elseif rhs:find("disable") then
                 action = "disable"
+            elseif rhs:find("toggle") then
+                action = "toggle"
             end
             table.insert(keys, {
                 lhs = map.lhs,

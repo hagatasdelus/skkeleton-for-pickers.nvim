@@ -121,7 +121,7 @@ reset_mock()
 
 local fed_char = "a"
 local orig_fn_getcharstr = nil
-_G.skkeleton_pickers_minipick_patched = nil
+_G.skkeleton_for_pickers_minipick_patched = nil
 orig_fn_getcharstr = function()
     return fed_char
 end
@@ -180,14 +180,14 @@ picker_new.setup({
 })
 
 -- Verify getcharstr is NOT patched immediately after setup
-assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr should not be patched immediately after setup")
+assert_eq(_G.skkeleton_for_pickers_minipick_patched, nil, "getcharstr should not be patched immediately after setup")
 assert_eq(vim.fn.getcharstr, orig_fn_getcharstr, "getcharstr should remain unpatched after setup")
 
 -- Simulate MiniPickStart event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
 
 -- Verify getcharstr IS patched after MiniPickStart
-assert_true(_G.skkeleton_pickers_minipick_patched == true, "getcharstr should be patched after MiniPickStart")
+assert_true(_G.skkeleton_for_pickers_minipick_patched == true, "getcharstr should be patched after MiniPickStart")
 
 -- Case A: Skkeleton disabled, MiniPick active
 mock.is_enabled = false
@@ -590,7 +590,7 @@ function _G.MiniPick.default_match(stritems, inds, query, opts)
 end
 
 -- Re-wrap default_match (normally done by wrap_default_match)
-package.loaded["skkeleton-for-pickers.minipick"].skkeleton_pickers_wrapped = nil
+package.loaded["skkeleton-for-pickers.minipick"].skkeleton_for_pickers_wrapped = nil
 package.loaded["skkeleton-for-pickers.minipick"].wrap_default_match()
 
 MiniPick.default_match({}, { 1 }, { "▽", "か", "▼", "な" }, {})
@@ -641,9 +641,9 @@ local minipick_mod = package.loaded["skkeleton-for-pickers.minipick"]
 minipick_mod.handle_picker_char("a")
 
 assert_true(set_picker_opts_called, "MiniPick.set_picker_opts should be called during handle_picker_char")
-assert_true(test_opts.mappings.skkeleton_pickers_ignore ~= nil, "skkeleton_pickers_ignore mapping should be added")
-assert_eq(test_opts.mappings.skkeleton_pickers_ignore.char, "\x1c", "ignore char should be Ctrl-\\")
-assert_eq(type(test_opts.mappings.skkeleton_pickers_ignore.func), "function", "ignore func should be a function")
+assert_true(test_opts.mappings.skkeleton_for_pickers_ignore ~= nil, "skkeleton_for_pickers_ignore mapping should be added")
+assert_eq(test_opts.mappings.skkeleton_for_pickers_ignore.char, "\x1c", "ignore char should be Ctrl-\\")
+assert_eq(type(test_opts.mappings.skkeleton_for_pickers_ignore.func), "function", "ignore func should be a function")
 
 assert_true(test_opts.source.match ~= nil, "source.match should exist")
 test_opts.source.match({}, { 1 }, { "▽", "て", "s", "u" }, {})
@@ -692,7 +692,7 @@ reset_mock()
 mock.is_enabled = false
 vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
 package.loaded["skkeleton-for-pickers.minipick"].restore_patch()
-_G.skkeleton_pickers_minipick_patched = nil
+_G.skkeleton_for_pickers_minipick_patched = nil
 
 local buf_z = vim.api.nvim_create_buf(false, true)
 vim.bo[buf_z].filetype = "minipick"
@@ -761,7 +761,7 @@ assert_true(not found_handle_keymap, "skkeleton#handle('handleKey', ...) mapping
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
 
 -- Verify patch is restored
-assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr patch should be removed after MiniPickStop")
+assert_eq(_G.skkeleton_for_pickers_minipick_patched, nil, "getcharstr patch should be removed after MiniPickStop")
 assert_eq(vim.fn.getcharstr, orig_fn_getcharstr, "getcharstr should be restored to original function")
 
 _G.MiniPick = nil

@@ -241,8 +241,8 @@ end
 
 -- Wrap default_match to support synchronous matching when routing skkeleton keys
 function M.wrap_default_match()
-    if _G.MiniPick and not _G.MiniPick.skkeleton_pickers_wrapped then
-        _G.MiniPick.skkeleton_pickers_wrapped = true
+    if _G.MiniPick and not _G.MiniPick.skkeleton_for_pickers_wrapped then
+        _G.MiniPick.skkeleton_for_pickers_wrapped = true
         local orig_default_match = _G.MiniPick.default_match
         _G.MiniPick.default_match = function(stritems, inds, query, opts)
             local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
@@ -275,15 +275,15 @@ function M.wrap_active_picker_opts()
 
     local modified = false
     opts.mappings = opts.mappings or {}
-    if not opts.mappings.skkeleton_pickers_ignore then
-        opts.mappings.skkeleton_pickers_ignore = {
+    if not opts.mappings.skkeleton_for_pickers_ignore then
+        opts.mappings.skkeleton_for_pickers_ignore = {
             char = IGNORE_CHAR,
             func = function() end,
         }
         modified = true
     end
 
-    if opts.source and type(opts.source.match) == "function" and not opts.source.skkeleton_pickers_match_wrapped then
+    if opts.source and type(opts.source.match) == "function" and not opts.source.skkeleton_for_pickers_match_wrapped then
         local orig_match = opts.source.match
         opts.source.match = function(stritems, inds, query, opts_match)
             local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
@@ -292,7 +292,7 @@ function M.wrap_active_picker_opts()
             end
             return orig_match(stritems, inds, query, opts_match)
         end
-        opts.source.skkeleton_pickers_match_wrapped = true
+        opts.source.skkeleton_for_pickers_match_wrapped = true
         modified = true
     end
 
@@ -388,7 +388,7 @@ function M.apply_patch()
     end
 
     _G.skkeleton_for_pickers_minipick_patched = true
-    _G.skkeleton_pickers_minipick_patched = true
+    _G.skkeleton_for_pickers_minipick_patched = true
 end
 
 function M.restore_patch()
@@ -397,7 +397,7 @@ function M.restore_patch()
         orig_getcharstr = nil
     end
     _G.skkeleton_for_pickers_minipick_patched = nil
-    _G.skkeleton_pickers_minipick_patched = nil
+    _G.skkeleton_for_pickers_minipick_patched = nil
 end
 
 return M

@@ -19,7 +19,7 @@ function M.apply_cr_map(buf)
 
         pcall(vim.fn["skkeleton#disable"])
 
-        local orig = vim.b[current_buf].skkeleton_for_pickers_original_cr or vim.b[current_buf].skkeleton_pickers_original_cr
+        local orig = vim.b[current_buf].skkeleton_for_pickers_original_cr
         if orig then
             if orig.callback then
                 orig.callback()
@@ -64,7 +64,7 @@ function M.setup_buffer()
     end
 
     -- Wrap CR mapping
-    if vim.b[buf].skkeleton_for_pickers_cr_wrapped or vim.b[buf].skkeleton_pickers_cr_wrapped then
+    if vim.b[buf].skkeleton_for_pickers_cr_wrapped then
         return
     end
 
@@ -82,10 +82,8 @@ function M.setup_buffer()
     end
 
     vim.b[buf].skkeleton_for_pickers_original_cr = map
-    vim.b[buf].skkeleton_pickers_original_cr = map
     M.apply_cr_map(buf)
     vim.b[buf].skkeleton_for_pickers_cr_wrapped = true
-    vim.b[buf].skkeleton_pickers_cr_wrapped = true
 
     -- Disable skkeleton when leaving the picker buffer
     vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {

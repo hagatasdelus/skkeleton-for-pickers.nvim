@@ -110,7 +110,6 @@ package.loaded["skkeleton-for-pickers.buffer"] = nil
 package.loaded["skkeleton-for-pickers.skk"] = nil
 package.loaded["skkeleton-for-pickers.minipick"] = nil
 _G.skkeleton_for_pickers_minipick_patched = nil
-_G.skkeleton_pickers_minipick_patched = nil
 
 local orig_getcharstr = vim.fn.getcharstr
 

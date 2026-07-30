@@ -106,10 +106,6 @@ end
 
 -- Load the plugin
 local picker = require("skkeleton-for-pickers")
-local picker_legacy_alias = require("skkeleton-pickers")
-if picker ~= picker_legacy_alias then
-    error("Backward compatibility alias require('skkeleton-pickers') must return skkeleton-for-pickers module")
-end
 
 -- Test 2: Buffer Setup and Keymaps
 print("Running Test 2: Buffer Setup and Keymaps...")
@@ -232,9 +228,7 @@ mock.is_enabled = true
 -- Re-apply our mapping since Case B may have removed it
 -- We need to manually re-apply since skkeleton-enable-post won't fire in test
 vim.b[buf].skkeleton_for_pickers_cr_wrapped = false
-vim.b[buf].skkeleton_pickers_cr_wrapped = false
 vim.b[buf].skkeleton_for_pickers_setup = true
-vim.b[buf].skkeleton_pickers_setup = true
 
 -- Re-set the original CR mapping that would have been restored by skkeleton#disable
 vim.keymap.set("i", "<CR>", function()
@@ -274,7 +268,6 @@ mock.config.markerHenkanSelect = "]"
 
 -- Re-apply mapping
 vim.b[buf].skkeleton_for_pickers_cr_wrapped = false
-vim.b[buf].skkeleton_pickers_cr_wrapped = false
 vim.keymap.set("i", "<CR>", function()
     original_cr_called = original_cr_called + 1
 end, { buffer = buf })
@@ -327,6 +320,7 @@ for _, m in ipairs(maps) do
     end
 end
 assert_true(has_cr_map, "CR mapping should be wrapped initially")
+assert_true(vim.b[buf3].skkeleton_for_pickers_cr_wrapped == true, "Buffer should be marked as wrapped")
 
 vim.keymap.set("i", "<CR>", "<Cmd>echo 'skkeleton'<CR>", { buffer = buf3, noremap = true, nowait = true })
 maps = vim.api.nvim_buf_get_keymap(buf3, "i")

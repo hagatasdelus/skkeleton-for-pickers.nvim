@@ -49,7 +49,7 @@ function M.setup(opts)
             group = group,
             callback = function()
                 local buf = vim.api.nvim_get_current_buf()
-                if vim.b[buf].skkeleton_pickers_cr_wrapped then
+                if vim.b[buf].skkeleton_for_pickers_cr_wrapped then
                     buffer.apply_cr_map(buf)
                 end
                 local is_minipick_active = _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" and _G.MiniPick.is_picker_active()

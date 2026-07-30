@@ -1,7 +1,7 @@
 ---@diagnostic disable: duplicate-set-field
 local M = {}
 
-local skk = require("skkeleton-pickers.skk")
+local skk = require("skkeleton-for-pickers.skk")
 
 M.picker_initialized = false
 M.is_routing_skk = false
@@ -387,6 +387,7 @@ function M.apply_patch()
         return char
     end
 
+    _G.skkeleton_for_pickers_minipick_patched = true
     _G.skkeleton_pickers_minipick_patched = true
 end
 
@@ -395,6 +396,7 @@ function M.restore_patch()
         vim.fn.getcharstr = orig_getcharstr
         orig_getcharstr = nil
     end
+    _G.skkeleton_for_pickers_minipick_patched = nil
     _G.skkeleton_pickers_minipick_patched = nil
 end
 

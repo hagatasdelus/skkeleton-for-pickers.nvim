@@ -1,6 +1,6 @@
-# skkeleton-pickers.nvim
+# skkeleton-for-pickers.nvim
 
-`skkeleton-pickers.nvim` is a Neovim plugin that provides seamless integration between the [skkeleton](https://github.com/vim-skk/skkeleton) Japanese input method and popular fuzzy finders, enabling smooth Japanese text input within prompt buffers.
+`skkeleton-for-pickers.nvim` is a Neovim plugin that provides seamless integration between the [skkeleton](https://github.com/vim-skk/skkeleton) Japanese input method and popular fuzzy finders, enabling smooth Japanese text input within prompt buffers.
 
 Normally, keymaps and modes of SKK can conflict with the prompt behavior of fuzzy finders. This plugin resolves those conflicts, allowing you to use SKK Japanese input in fuzzy finders stress-free.
 
@@ -23,7 +23,7 @@ Normally, keymaps and modes of SKK can conflict with the prompt behavior of fuzz
 
 ```lua
 {
-  "hagatasdelus/skkeleton-pickers.nvim",
+  "hagatasdelus/skkeleton-for-pickers.nvim",
   dependencies = {
     "vim-skk/skkeleton",
     -- Optional dependencies based on your finder:
@@ -31,7 +31,7 @@ Normally, keymaps and modes of SKK can conflict with the prompt behavior of fuzz
     -- "echasnovski/mini.pick",
   },
   config = function()
-    require("skkeleton-pickers").setup({
+    require("skkeleton-for-pickers").setup({
       pickers = {
         telescope = { enabled = true },
         mini_pick = { enabled = true },
@@ -47,11 +47,11 @@ Normally, keymaps and modes of SKK can conflict with the prompt behavior of fuzz
 local MiniDeps = require('mini.deps')
 
 MiniDeps.add({
-  source = 'hagatasdelus/skkeleton-pickers.nvim',
+  source = 'hagatasdelus/skkeleton-for-pickers.nvim',
   depends = { 'vim-skk/skkeleton' },
 })
 
-require('skkeleton-pickers').setup({
+require('skkeleton-for-pickers').setup({
   pickers = {
     telescope = { enabled = true },
     mini_pick = { enabled = true },
@@ -67,7 +67,7 @@ You can customize the behavior by passing options to `setup()`:
 > All pickers are disabled by default (`enabled = false`). You must explicitly set `enabled = true` for the pickers you use.
 
 ```lua
-require("skkeleton-pickers").setup({
+require("skkeleton-for-pickers").setup({
   pickers = {
     telescope = { enabled = true },
     mini_pick = { enabled = true },

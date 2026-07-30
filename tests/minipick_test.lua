@@ -113,7 +113,7 @@ local function reset_mock()
 end
 
 -- Load the plugin
-local picker = require("skkeleton-pickers")
+local picker = require("skkeleton-for-pickers")
 
 -- Test 6: mini.pick integration
 print("Running Test 6: mini.pick integration via getcharstr monkeypatch...")
@@ -127,12 +127,12 @@ orig_fn_getcharstr = function()
 end
 vim.fn.getcharstr = orig_fn_getcharstr
 
-package.loaded["skkeleton-pickers"] = nil
-package.loaded["skkeleton-pickers.config"] = nil
-package.loaded["skkeleton-pickers.buffer"] = nil
-package.loaded["skkeleton-pickers.skk"] = nil
-package.loaded["skkeleton-pickers.minipick"] = nil
-local picker_new = require("skkeleton-pickers")
+package.loaded["skkeleton-for-pickers"] = nil
+package.loaded["skkeleton-for-pickers.config"] = nil
+package.loaded["skkeleton-for-pickers.buffer"] = nil
+package.loaded["skkeleton-for-pickers.skk"] = nil
+package.loaded["skkeleton-for-pickers.minipick"] = nil
+local picker_new = require("skkeleton-for-pickers")
 
 _G.MiniPick = {
     active_picker = {
@@ -317,7 +317,7 @@ end
 
 mock.preedit = ""
 -- Mock a backspace-led confirmed result
-picker_henkan = require("skkeleton-pickers")
+picker_henkan = require("skkeleton-for-pickers")
 picker_henkan.setup({
     pickers = {
         mini_pick = { enabled = true },
@@ -325,7 +325,7 @@ picker_henkan.setup({
 })
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
 -- Set prev_preedit to the old preedit that backspaces target
-package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽u"
+package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽u"
 -- Mock getPreEdit to return empty (conversion confirmed)
 local orig_denops_request_L = vim.fn["denops#request"]
 vim.fn["denops#request"] = function(plugin, method, args)
@@ -334,7 +334,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     end
     return orig_denops_request_L(plugin, method, args)
 end
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8\8う")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("\8\8う")
 vim.fn["denops#request"] = orig_denops_request_L
 local final_q = _G.MiniPick.get_picker_query()
 assert_eq(#final_q, 3, "Query should have 3 characters ('あ', 'い', 'う')")
@@ -348,7 +348,7 @@ vim.api.nvim_buf_set_name(buf_toggle, "TestTelescopePromptToggle")
 vim.bo[buf_toggle].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf_toggle)
 
-package.loaded["skkeleton-pickers.buffer"].setup_buffer()
+package.loaded["skkeleton-for-pickers.buffer"].setup_buffer()
 local toggle_maps = vim.api.nvim_buf_get_keymap(buf_toggle, "i")
 local found_custom_toggle = false
 for _, m in ipairs(toggle_maps) do
@@ -380,7 +380,7 @@ function _G.MiniPick.set_picker_query(query)
 end
 
 -- Reset prev_preedit to empty (first key press, no prior preedit)
-package.loaded["skkeleton-pickers.minipick"].prev_preedit = ""
+package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = ""
 
 -- Mock denops#request to return "▽k" for getPreEdit
 local orig_denops_request = vim.fn["denops#request"]
@@ -395,7 +395,7 @@ end
 -- getPreEdit() = "▽k"
 -- kakutei = "" (result == cur_preedit, no confirmed text)
 -- query = {} + preedit "▽k" = {"▽", "k"}
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("▽k")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("▽k")
 local q_case_n = _G.MiniPick.get_picker_query()
 assert_eq(#q_case_n, 2, "Query should have 2 characters ('▽', 'k')")
 assert_eq(q_case_n[1], "▽", "First char should be '▽'")
@@ -413,7 +413,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     return orig_denops_request(plugin, method, args)
 end
 -- result = "\b\b▽き" (2 BS to erase "▽k" segments, then new preedit)
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8\8▽き")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("\8\8▽き")
 local q_case_o = _G.MiniPick.get_picker_query()
 assert_eq(#q_case_o, 2, "Query should have 2 characters ('▽', 'き')")
 assert_eq(q_case_o[1], "▽", "First char should be '▽'")
@@ -430,7 +430,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     return orig_denops_request(plugin, method, args)
 end
 -- result = "\b\b機" (2 BS for "▽き" segments, then confirmed "機")
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8\8機")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("\8\8機")
 local q_case_p = _G.MiniPick.get_picker_query()
 assert_eq(#q_case_p, 1, "Query should have 1 character ('機')")
 assert_eq(q_case_p[1], "機", "First char should be '機'")
@@ -438,7 +438,7 @@ assert_eq(q_case_p[1], "機", "First char should be '機'")
 -- Case Q: Consonant append during preedit (▽き → ▽きn)
 -- Simulates typing 'n' after '▽き', so preedit is "▽きn" and skkeleton returns "n"
 _G.MiniPick.active_picker.query = { "▽", "き" }
-package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽き"
+package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽き"
 vim.fn["denops#request"] = function(plugin, method, args)
     if plugin == "skkeleton" and method == "getPreEdit" then
         return "▽きn"
@@ -446,7 +446,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     return orig_denops_request(plugin, method, args)
 end
 -- result = "n" (from preEdit.output where next starts with #current)
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("n")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("n")
 local q_case_q = _G.MiniPick.get_picker_query()
 assert_eq(#q_case_q, 3, "Query should have 3 characters ('▽', 'き', 'n')")
 assert_eq(q_case_q[1], "▽", "First char should be '▽'")
@@ -456,7 +456,7 @@ assert_eq(q_case_q[3], "n", "Third char should be 'n'")
 -- Case R: Consonant input duplication (sora -> そら)
 -- Simulates sequential typing of s, o, r, a in direct mode (no marker).
 _G.MiniPick.active_picker.query = {}
-package.loaded["skkeleton-pickers.minipick"].prev_preedit = ""
+package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = ""
 
 -- 1. Type 's' -> getPreEdit returns 's', result = 's'
 vim.fn["denops#request"] = function(plugin, method, args)
@@ -465,7 +465,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     end
     return orig_denops_request(plugin, method, args)
 end
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("s")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("s")
 local q_r1 = _G.MiniPick.get_picker_query()
 assert_eq(#q_r1, 1, "Query should have 1 character after 's'")
 assert_eq(q_r1[1], "s", "Char should be 's'")
@@ -477,7 +477,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     end
     return orig_denops_request(plugin, method, args)
 end
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8そ")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("\8そ")
 local q_r2 = _G.MiniPick.get_picker_query()
 assert_eq(#q_r2, 1, "Query should have 1 character after 'o'")
 assert_eq(q_r2[1], "そ", "Char should be 'そ'")
@@ -489,7 +489,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     end
     return orig_denops_request(plugin, method, args)
 end
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("r")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("r")
 local q_r3 = _G.MiniPick.get_picker_query()
 assert_eq(#q_r3, 2, "Query should have 2 characters after 'r'")
 assert_eq(q_r3[1], "そ", "First char should be 'そ'")
@@ -502,7 +502,7 @@ vim.fn["denops#request"] = function(plugin, method, args)
     end
     return orig_denops_request(plugin, method, args)
 end
-package.loaded["skkeleton-pickers.minipick"].process_skk_result("\8ら")
+package.loaded["skkeleton-for-pickers.minipick"].process_skk_result("\8ら")
 local q_r4 = _G.MiniPick.get_picker_query()
 assert_eq(#q_r4, 2, "Query should have 2 characters after 'a'")
 assert_eq(q_r4[1], "そ", "First char should be 'そ'")
@@ -514,7 +514,7 @@ mock.handle_calls = {}
 mock.handle_return = "\8\8\8\8\8▽からす"
 
 _G.MiniPick.active_picker.query = { "▽", "か", "ら", "す", "ま" }
-package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽からすま"
+package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽からすま"
 
 local del_termcode = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
 fed_char = del_termcode
@@ -544,7 +544,7 @@ mock.handle_calls = {}
 mock.handle_return = "\8\8\8\8\8▽からす"
 
 _G.MiniPick.active_picker.query = { "▽", "か", "ら", "す", "ま" }
-package.loaded["skkeleton-pickers.minipick"].prev_preedit = "▽からすま"
+package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽からすま"
 
 local bs_termcode = vim.api.nvim_replace_termcodes("<BS>", true, true, true)
 fed_char = bs_termcode
@@ -590,8 +590,8 @@ function _G.MiniPick.default_match(stritems, inds, query, opts)
 end
 
 -- Re-wrap default_match (normally done by wrap_default_match)
-package.loaded["skkeleton-pickers.minipick"].skkeleton_pickers_wrapped = nil
-package.loaded["skkeleton-pickers.minipick"].wrap_default_match()
+package.loaded["skkeleton-for-pickers.minipick"].skkeleton_pickers_wrapped = nil
+package.loaded["skkeleton-for-pickers.minipick"].wrap_default_match()
 
 MiniPick.default_match({}, { 1 }, { "▽", "か", "▼", "な" }, {})
 assert_eq(#passed_query_to_orig_match, 2, "Marker characters should be stripped from query in default_match")
@@ -637,7 +637,7 @@ _G.MiniPick = {
     set_picker_query = function(q) end,
 }
 
-local minipick_mod = package.loaded["skkeleton-pickers.minipick"]
+local minipick_mod = package.loaded["skkeleton-for-pickers.minipick"]
 minipick_mod.handle_picker_char("a")
 
 assert_true(set_picker_opts_called, "MiniPick.set_picker_opts should be called during handle_picker_char")
@@ -691,14 +691,14 @@ assert_eq(mock.disabled_count, 0, "Skkeleton should not be disabled on Esc durin
 reset_mock()
 mock.is_enabled = false
 vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
-package.loaded["skkeleton-pickers.minipick"].restore_patch()
+package.loaded["skkeleton-for-pickers.minipick"].restore_patch()
 _G.skkeleton_pickers_minipick_patched = nil
 
 local buf_z = vim.api.nvim_create_buf(false, true)
 vim.bo[buf_z].filetype = "minipick"
 vim.api.nvim_set_current_buf(buf_z)
 
-package.loaded["skkeleton-pickers"].setup({
+package.loaded["skkeleton-for-pickers"].setup({
     pickers = {
         mini_pick = { enabled = true },
     },
@@ -748,7 +748,7 @@ assert_eq(mock.disabled_count, 1, "Skkeleton should be disabled when pressing sk
 
 -- Case CC: skkeleton#handle('handleKey', ...) should NOT be treated as a toggle keymap
 vim.keymap.set("i", "<C-k>", "<Cmd>call skkeleton#handle('handleKey', {'key': 'a'})<CR>", { noremap = true })
-local keymaps_cc = require("skkeleton-pickers.skk").get_skkeleton_keymaps("i")
+local keymaps_cc = require("skkeleton-for-pickers.skk").get_skkeleton_keymaps("i")
 local found_handle_keymap = false
 for _, km in ipairs(keymaps_cc) do
     if km.lhs:upper() == "<C-K>" then

@@ -1,6 +1,6 @@
 local M = {}
 
-local skk = require("skkeleton-pickers.skk")
+local skk = require("skkeleton-for-pickers.skk")
 
 M.active_fts = {}
 
@@ -19,7 +19,7 @@ function M.apply_cr_map(buf)
 
         pcall(vim.fn["skkeleton#disable"])
 
-        local orig = vim.b[current_buf].skkeleton_pickers_original_cr
+        local orig = vim.b[current_buf].skkeleton_for_pickers_original_cr or vim.b[current_buf].skkeleton_pickers_original_cr
         if orig then
             if orig.callback then
                 orig.callback()
@@ -46,7 +46,7 @@ function M.setup_buffer()
     -- Skip setup for mini.pick prompt buffer since it does not use insert-mode mappings
     -- and we handle its initialization dynamically in the getcharstr patch.
     if ft == "minipick" then
-        require("skkeleton-pickers.minipick").apply_patch()
+        require("skkeleton-for-pickers.minipick").apply_patch()
         return
     end
 
@@ -64,7 +64,7 @@ function M.setup_buffer()
     end
 
     -- Wrap CR mapping
-    if vim.b[buf].skkeleton_pickers_cr_wrapped then
+    if vim.b[buf].skkeleton_for_pickers_cr_wrapped or vim.b[buf].skkeleton_pickers_cr_wrapped then
         return
     end
 
@@ -81,8 +81,10 @@ function M.setup_buffer()
         return
     end
 
+    vim.b[buf].skkeleton_for_pickers_original_cr = map
     vim.b[buf].skkeleton_pickers_original_cr = map
     M.apply_cr_map(buf)
+    vim.b[buf].skkeleton_for_pickers_cr_wrapped = true
     vim.b[buf].skkeleton_pickers_cr_wrapped = true
 
     -- Disable skkeleton when leaving the picker buffer

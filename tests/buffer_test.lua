@@ -105,7 +105,11 @@ local function reset_mock()
 end
 
 -- Load the plugin
-local picker = require("skkeleton-pickers")
+local picker = require("skkeleton-for-pickers")
+local picker_legacy_alias = require("skkeleton-pickers")
+if picker ~= picker_legacy_alias then
+    error("Backward compatibility alias require('skkeleton-pickers') must return skkeleton-for-pickers module")
+end
 
 -- Test 2: Buffer Setup and Keymaps
 print("Running Test 2: Buffer Setup and Keymaps...")
@@ -131,7 +135,7 @@ end, { buffer = buf })
 
 vim.bo[buf].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf)
-vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonPickers", buffer = buf })
+vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonForPickers", buffer = buf })
 
 vim.wait(20, function()
     return false
@@ -196,7 +200,7 @@ for _, m in ipairs(maps) do
     end
 end
 if not found_cr then
-    vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
+    vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonForPickers", buffer = buf })
     vim.wait(20, function()
         return false
     end)
@@ -218,18 +222,27 @@ assert_eq(mock.handle_calls[1].opts.key, "\n", "Should pass NL key")
 assert_eq(mock.disabled_count, 0, "Should NOT disable skkeleton when marker is present")
 assert_eq(original_cr_called, 0, "Original CR should NOT be called when marker is present")
 
--- Case C: Skkeleton enabled without marker
+-- Case C: Skkeleton enabled, line has NO marker — should disable skkeleton
+-- and feed <CR> to trigger the picker's file selection
 print("  Case C: Skkeleton enabled without marker")
 original_cr_called = 0
 reset_mock()
 mock.is_enabled = true
 
+-- Re-apply our mapping since Case B may have removed it
+-- We need to manually re-apply since skkeleton-enable-post won't fire in test
+vim.b[buf].skkeleton_for_pickers_cr_wrapped = false
 vim.b[buf].skkeleton_pickers_cr_wrapped = false
+vim.b[buf].skkeleton_for_pickers_setup = true
 vim.b[buf].skkeleton_pickers_setup = true
+
+-- Re-set the original CR mapping that would have been restored by skkeleton#disable
 vim.keymap.set("i", "<CR>", function()
     original_cr_called = original_cr_called + 1
 end, { buffer = buf })
-vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
+
+-- Now re-trigger setup to wrap it
+vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonForPickers", buffer = buf })
 vim.wait(20, function()
     return false
 end)
@@ -243,9 +256,12 @@ for _, m in ipairs(maps) do
     end
 end
 assert_true(found_cr ~= nil, "CR mapping must exist for Case C")
+
+-- Set buffer line without marker
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "かんじ" })
 cr_callback = found_cr.callback
 cr_callback()
+
 assert_eq(mock.disabled_count, 1, "Should disable skkeleton when no marker")
 
 -- Case D: Skkeleton enabled with custom markers
@@ -256,11 +272,13 @@ mock.is_enabled = true
 mock.config.markerHenkan = "["
 mock.config.markerHenkanSelect = "]"
 
+-- Re-apply mapping
+vim.b[buf].skkeleton_for_pickers_cr_wrapped = false
 vim.b[buf].skkeleton_pickers_cr_wrapped = false
 vim.keymap.set("i", "<CR>", function()
     original_cr_called = original_cr_called + 1
 end, { buffer = buf })
-vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
+vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonForPickers", buffer = buf })
 vim.wait(20, function()
     return false
 end)
@@ -299,7 +317,7 @@ picker.setup({
 reset_mock()
 vim.bo[buf3].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf3)
-vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonPickers", buffer = buf3 })
+vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonForPickers", buffer = buf3 })
 
 maps = vim.api.nvim_buf_get_keymap(buf3, "i")
 local has_cr_map = false

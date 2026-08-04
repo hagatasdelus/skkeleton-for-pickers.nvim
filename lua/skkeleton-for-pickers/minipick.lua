@@ -201,30 +201,18 @@ function M.route_key_to_skk(char)
         routed_key = "\x08"
     end
 
-    if routed_key == "\r" or routed_key == "\n" then
-        if skk.has_skkeleton_marker() then
-            local result = skk.call_skk_handle("handleKey", { key = NL_TERMCODE, expr = true })
-            M.process_skk_result(result)
-            M.is_routing_skk = false
-            return IGNORE_CHAR
-        else
+    if routed_key == "\r" or routed_key == "\n" or routed_key == "\x1b" then
+        if not skk.has_skkeleton_marker() then
             pcall(vim.fn["skkeleton#disable"])
             M.is_routing_skk = false
             return char
         end
-    end
 
-    if routed_key == "\x1b" then
-        if skk.has_skkeleton_marker() then
-            local result = skk.call_skk_handle("handleKey", { key = "\x07", expr = true })
-            M.process_skk_result(result)
-            M.is_routing_skk = false
-            return IGNORE_CHAR
-        else
-            pcall(vim.fn["skkeleton#disable"])
-            M.is_routing_skk = false
-            return char
-        end
+        local skk_key = (routed_key == "\x1b") and "\x07" or NL_TERMCODE
+        local result = skk.call_skk_handle("handleKey", { key = skk_key, expr = true })
+        M.process_skk_result(result)
+        M.is_routing_skk = false
+        return IGNORE_CHAR
     end
 
     local result = skk.call_skk_handle("handleKey", { key = routed_key, expr = true })
@@ -316,17 +304,13 @@ function M.handle_toggle_key(action)
         should_enable = not skk_enabled
     end
 
-    if should_enable then
-        if not skk_enabled then
-            M.is_routing_skk = true
-            skk.call_skk_handle("enable", { expr = true })
-            pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
-            M.is_routing_skk = false
-        end
-    else
-        if skk_enabled then
-            pcall(vim.fn["skkeleton#disable"])
-        end
+    if should_enable and not skk_enabled then
+        M.is_routing_skk = true
+        skk.call_skk_handle("enable", { expr = true })
+        pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
+        M.is_routing_skk = false
+    elseif not should_enable and skk_enabled then
+        pcall(vim.fn["skkeleton#disable"])
     end
     return IGNORE_CHAR
 end

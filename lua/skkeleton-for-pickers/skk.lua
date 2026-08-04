@@ -1,14 +1,11 @@
 local M = {}
 
 function M.get_skk_markers()
-    local marker_henkan = "▽"
-    local marker_henkan_select = "▼"
     local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
-    if ok_config and type(cfg) == "table" then
-        marker_henkan = cfg.markerHenkan or marker_henkan
-        marker_henkan_select = cfg.markerHenkanSelect or marker_henkan_select
+    if not (ok_config and type(cfg) == "table") then
+        return "▽", "▼"
     end
-    return marker_henkan, marker_henkan_select
+    return cfg.markerHenkan or "▽", cfg.markerHenkanSelect or "▼"
 end
 
 function M.get_skkeleton_keymaps(mode)
@@ -140,34 +137,34 @@ function M.call_skk_handle(func, opts)
     }
 
     local ok_req, ret = pcall(vim.fn["denops#request"], "skkeleton", "handle", { func, normalized_opts, vim_status })
-
-    if ok_req and ret then
-        -- Update g:skkeleton#state
-        if ret.state then
-            vim.g["skkeleton#state"] = ret.state
-        end
-
-        local result = ret.result or ""
-
-        -- Handle <Cmd>...<CR> results
-        if result:find("^<Cmd>") then
-            local cmd_body = result:sub(6)
-            result = vim.api.nvim_replace_termcodes("<Cmd>" .. cmd_body .. "<CR>", true, true, true)
-        end
-
-        -- Fire autocmds
-        pcall(vim.fn["skkeleton#doautocmd"])
-
-        if opts.expr then
-            return result
-        end
-
-        if result ~= "" then
-            vim.api.nvim_feedkeys(result, "nit", false)
-        end
-        return ""
+    if not (ok_req and ret) then
+        return nil
     end
-    return nil
+
+    -- Update g:skkeleton#state
+    if ret.state then
+        vim.g["skkeleton#state"] = ret.state
+    end
+
+    local result = ret.result or ""
+
+    -- Handle <Cmd>...<CR> results
+    if result:find("^<Cmd>") then
+        local cmd_body = result:sub(6)
+        result = vim.api.nvim_replace_termcodes("<Cmd>" .. cmd_body .. "<CR>", true, true, true)
+    end
+
+    -- Fire autocmds
+    pcall(vim.fn["skkeleton#doautocmd"])
+
+    if opts.expr then
+        return result
+    end
+
+    if result ~= "" then
+        vim.api.nvim_feedkeys(result, "nit", false)
+    end
+    return ""
 end
 
 return M

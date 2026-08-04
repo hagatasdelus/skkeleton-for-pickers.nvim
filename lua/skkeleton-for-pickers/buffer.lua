@@ -9,27 +9,26 @@ function M.apply_cr_map(buf)
         local current_buf = vim.api.nvim_get_current_buf()
         local has_skk, is_enabled = pcall(vim.fn["skkeleton#is_enabled"])
 
-        if has_skk and is_enabled then
-            if skk.has_skkeleton_marker() then
-                local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
-                pcall(vim.fn["skkeleton#handle"], "handleKey", { key = nl })
-                return
-            end
+        if has_skk and is_enabled and skk.has_skkeleton_marker() then
+            local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
+            pcall(vim.fn["skkeleton#handle"], "handleKey", { key = nl })
+            return
         end
 
         pcall(vim.fn["skkeleton#disable"])
 
         local orig = vim.b[current_buf].skkeleton_for_pickers_original_cr
-        if orig then
-            if orig.callback then
-                orig.callback()
-                return
-            elseif orig.rhs then
-                local keys = vim.api.nvim_replace_termcodes(orig.rhs, true, true, true)
-                vim.api.nvim_feedkeys(keys, orig.noremap == 1 and "n" or "m", false)
-                return
-            end
+        if orig and orig.callback then
+            orig.callback()
+            return
         end
+
+        if orig and orig.rhs then
+            local keys = vim.api.nvim_replace_termcodes(orig.rhs, true, true, true)
+            vim.api.nvim_feedkeys(keys, orig.noremap == 1 and "n" or "m", false)
+            return
+        end
+
         local cr = vim.api.nvim_replace_termcodes("<CR>", true, true, true)
         vim.api.nvim_feedkeys(cr, "n", false)
     end, { buffer = buf, silent = true })

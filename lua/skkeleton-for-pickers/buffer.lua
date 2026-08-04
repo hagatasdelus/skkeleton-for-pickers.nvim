@@ -56,8 +56,7 @@ function M.setup_buffer()
     local has_skk, is_enabled = pcall(vim.fn["skkeleton#is_enabled"])
     if not (has_skk and is_enabled) then
         for _, mode in ipairs({ "i", "n" }) do
-            local keymaps = skk.get_skkeleton_keymaps(mode)
-            for _, item in ipairs(keymaps) do
+            for _, item in ipairs(skk.get_skkeleton_keymaps(mode)) do
                 vim.keymap.set(mode, item.lhs, item.rhs, { buffer = buf, silent = true, remap = true })
             end
         end
@@ -68,14 +67,10 @@ function M.setup_buffer()
         return
     end
 
-    local map = nil
     local maps = vim.api.nvim_buf_get_keymap(buf, "i")
-    for _, m in ipairs(maps) do
-        if m.lhs:upper() == "<CR>" then
-            map = m
-            break
-        end
-    end
+    local map = vim.iter(maps):find(function(m)
+        return m.lhs:upper() == "<CR>"
+    end)
 
     if not map then
         return

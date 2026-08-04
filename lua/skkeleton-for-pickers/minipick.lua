@@ -35,13 +35,11 @@ end
 -- Strip conversion markers (▽/▼) from the query array
 function M.clean_query_markers(query)
     local marker_henkan, marker_henkan_select = skk.get_skk_markers()
-    local clean_query = {}
-    for _, char in ipairs(query) do
-        if char ~= marker_henkan and char ~= marker_henkan_select then
-            table.insert(clean_query, char)
-        end
-    end
-    return clean_query
+    return vim.iter(query)
+        :filter(function(char)
+            return char ~= marker_henkan and char ~= marker_henkan_select
+        end)
+        :totable()
 end
 
 -- Remove the previous preedit from the query
@@ -56,14 +54,10 @@ function M.remove_old_preedit(query, prev_preedit, marker_henkan, marker_henkan_
         end
     end
 
-    -- 2. Fallback: Strip using markers if they are still present in the query
-    local truncate_idx = nil
-    for i, char in ipairs(query) do
-        if char == marker_henkan or char == marker_henkan_select then
-            truncate_idx = i
-            break
-        end
-    end
+    local truncate_idx = vim.iter(query):enumerate():find(function(_, char)
+        return char == marker_henkan or char == marker_henkan_select
+    end)
+
     if truncate_idx then
         while #query >= truncate_idx do
             table.remove(query)
@@ -283,7 +277,11 @@ function M.wrap_active_picker_opts()
         modified = true
     end
 
-    if opts.source and type(opts.source.match) == "function" and not opts.source.skkeleton_for_pickers_match_wrapped then
+    if
+        opts.source
+        and type(opts.source.match) == "function"
+        and not opts.source.skkeleton_for_pickers_match_wrapped
+    then
         local orig_match = opts.source.match
         opts.source.match = function(stritems, inds, query, opts_match)
             local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
@@ -343,10 +341,11 @@ function M.handle_picker_char(char)
 
     -- Check if user pressed any of their derived skkeleton keymaps
     local keymaps = skk.get_skkeleton_keymaps("i")
-    for _, item in ipairs(keymaps) do
-        if char == item.raw then
-            return M.handle_toggle_key(item.action)
-        end
+    local matched_item = vim.iter(keymaps):find(function(item)
+        return char == item.raw
+    end)
+    if matched_item then
+        return M.handle_toggle_key(matched_item.action)
     end
 
     -- Re-evaluate skkeleton enablement state

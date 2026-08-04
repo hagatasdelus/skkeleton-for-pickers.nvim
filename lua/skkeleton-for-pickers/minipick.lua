@@ -221,18 +221,20 @@ function M.route_key_to_skk(char)
     return IGNORE_CHAR
 end
 
+-- Safely check if skkeleton is currently enabled
+function M.is_skk_enabled()
+    local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
+    return ok_s and skk_e
+end
+
 -- Wrap default_match to support synchronous matching when routing skkeleton keys
 function M.wrap_default_match()
     if _G.MiniPick and not _G.MiniPick.skkeleton_for_pickers_wrapped then
         _G.MiniPick.skkeleton_for_pickers_wrapped = true
         local orig_default_match = _G.MiniPick.default_match
         _G.MiniPick.default_match = function(stritems, inds, query, opts)
-            local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
-            if ok_s and skk_e then
-                -- Shallow copy to avoid mutating the original options table
+            if M.is_skk_enabled() then
                 opts = vim.tbl_extend("force", {}, opts or {}, { sync = true })
-
-                -- Clean query by stripping conversion markers (▽/▼)
                 query = M.clean_query_markers(query)
             end
             return orig_default_match(stritems, inds, query, opts)
@@ -272,8 +274,7 @@ function M.wrap_active_picker_opts()
     then
         local orig_match = opts.source.match
         opts.source.match = function(stritems, inds, query, opts_match)
-            local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
-            if ok_s and skk_e then
+            if M.is_skk_enabled() then
                 query = M.clean_query_markers(query)
             end
             return orig_match(stritems, inds, query, opts_match)
@@ -349,6 +350,21 @@ function M.handle_picker_char(char)
     return char
 end
 
+function M.patched_getcharstr(orig_fn, ...)
+    local char = orig_fn(...)
+
+    -- Normalize backspace key
+    if char == "\x7f" then
+        char = "\x08"
+    end
+
+    if is_picker_win_active() then
+        return M.handle_picker_char(char)
+    end
+
+    return char
+end
+
 function M.apply_patch()
     if orig_getcharstr then
         return
@@ -356,22 +372,17 @@ function M.apply_patch()
 
     orig_getcharstr = vim.fn.getcharstr
     vim.fn.getcharstr = function(...)
-        local char = orig_getcharstr(...)
-
-        -- Normalize backspace key
-        if char == "\x7f" then
-            char = "\x08"
-        end
-
-        if is_picker_win_active() then
-            return M.handle_picker_char(char)
-        end
-
-        return char
+        return M.patched_getcharstr(orig_getcharstr, ...)
     end
 
     _G.skkeleton_for_pickers_minipick_patched = true
-    _G.skkeleton_for_pickers_minipick_patched = true
+end
+
+function M.on_picker_stop()
+    M.picker_initialized = false
+    M.prev_preedit = ""
+    pcall(vim.fn["skkeleton#disable"])
+    M.restore_patch()
 end
 
 function M.restore_patch()

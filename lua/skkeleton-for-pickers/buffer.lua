@@ -2,6 +2,7 @@ local M = {}
 
 local skk = require("skkeleton-for-pickers.skk")
 local core = require("skkeleton-for-pickers.core")
+local state = require("skkeleton-for-pickers.state")
 
 M.active_fts = {}
 
@@ -17,7 +18,7 @@ function M.handle_cr_key(buf)
 
     pcall(vim.fn["skkeleton#disable"])
 
-    local orig = vim.b[buf].skkeleton_for_pickers_original_cr
+    local orig = state.get_original_cr(buf)
     if orig and orig.callback then
         orig.callback()
         return
@@ -41,7 +42,7 @@ end
 
 function M.handle_skkeleton_enable_post(is_minipick_enabled)
     local buf = vim.api.nvim_get_current_buf()
-    if vim.b[buf].skkeleton_for_pickers_cr_wrapped then
+    if state.is_cr_wrapped(buf) then
         M.apply_cr_map(buf)
     end
     local is_minipick_active = _G.MiniPick
@@ -56,11 +57,12 @@ function M.setup_buffer()
     local buf = vim.api.nvim_get_current_buf()
     local ft = vim.bo[buf].filetype
 
+    local buf_ctx = state.read_buffer_context(buf)
     local plan = core.plan_buffer_setup({
         ft = ft,
         is_active_ft = vim.tbl_contains(M.active_fts, ft),
-        skk_enabled = (vim.b[buf].skkeleton == true),
-        cr_wrapped = (vim.b[buf].skkeleton_for_pickers_cr_wrapped == true),
+        skk_enabled = buf_ctx.skk_enabled,
+        cr_wrapped = buf_ctx.cr_wrapped,
     })
 
     if plan.action == "skip" then
@@ -72,7 +74,7 @@ function M.setup_buffer()
         return
     end
 
-    vim.b[buf].skkeleton = true
+    state.mark_skk_enabled(buf, true)
 
     -- Re-bind user's skkeleton keymaps (Insert and Normal mode) in prompt buffer if skkeleton is not currently active
     local has_skk, is_enabled = pcall(vim.fn["skkeleton#is_enabled"])
@@ -85,7 +87,7 @@ function M.setup_buffer()
     end
 
     -- Wrap CR mapping
-    if vim.b[buf].skkeleton_for_pickers_cr_wrapped then
+    if state.is_cr_wrapped(buf) then
         return
     end
 
@@ -96,9 +98,9 @@ function M.setup_buffer()
         return
     end
 
-    vim.b[buf].skkeleton_for_pickers_original_cr = map
+    state.save_original_cr(buf, map)
     M.apply_cr_map(buf)
-    vim.b[buf].skkeleton_for_pickers_cr_wrapped = true
+    state.mark_cr_wrapped(buf, true)
 
     -- Disable skkeleton when leaving the picker buffer
     vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {

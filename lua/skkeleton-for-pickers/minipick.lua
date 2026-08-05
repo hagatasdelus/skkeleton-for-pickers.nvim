@@ -3,11 +3,7 @@ local M = {}
 
 local skk = require("skkeleton-for-pickers.skk")
 local core = require("skkeleton-for-pickers.core")
-
-M.picker_initialized = false
-M.is_routing_skk = false
-M.prev_preedit = ""
-local orig_getcharstr = nil
+local state = require("skkeleton-for-pickers.state")
 
 -- Cache key termcodes including <NL> for accurate skkeleton key routing
 local TERMCODES = {
@@ -65,14 +61,14 @@ function M.process_skk_result(result)
 
     local new_query, new_prev = core.calculate_new_query({
         query = query,
-        prev_preedit = M.prev_preedit,
+        prev_preedit = state.get_prev_preedit(),
         result = result,
         cur_preedit = cur_preedit,
         marker_henkan = marker_henkan,
         marker_henkan_select = marker_henkan_select,
     })
 
-    M.prev_preedit = new_prev
+    state.set_prev_preedit(new_prev)
     MiniPick.set_picker_query(new_query)
 end
 
@@ -83,7 +79,7 @@ end
 
 -- Handle normal key routing to skkeleton
 function M.route_key_to_skk(char)
-    M.is_routing_skk = true
+    state.set_routing_skk(true)
 
     local routed_key = core.normalize_routed_key(char, TERMCODES)
     local has_marker = skk.has_skkeleton_marker()
@@ -91,13 +87,13 @@ function M.route_key_to_skk(char)
 
     if plan.action == "disable_skk" then
         pcall(vim.fn["skkeleton#disable"])
-        M.is_routing_skk = false
+        state.set_routing_skk(false)
         return char
     end
 
     local result = skk.call_skk_handle("handleKey", { key = plan.skk_key or routed_key, expr = true })
     M.process_skk_result(result)
-    M.is_routing_skk = false
+    state.set_routing_skk(false)
     return IGNORE_CHAR
 end
 
@@ -192,10 +188,10 @@ function M.handle_toggle_key(action)
     end
 
     if should_enable and not skk_enabled then
-        M.is_routing_skk = true
+        state.set_routing_skk(true)
         skk.call_skk_handle("enable", { expr = true })
         pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
-        M.is_routing_skk = false
+        state.set_routing_skk(false)
     elseif not should_enable and skk_enabled then
         pcall(vim.fn["skkeleton#disable"])
     end
@@ -252,31 +248,31 @@ function M.patched_getcharstr(orig_fn, ...)
 end
 
 function M.apply_patch()
-    if orig_getcharstr then
+    if state.get_orig_getcharstr() then
         return
     end
 
-    orig_getcharstr = vim.fn.getcharstr
+    local orig_fn = vim.fn.getcharstr
+    state.set_orig_getcharstr(orig_fn)
     vim.fn.getcharstr = function(...)
-        return M.patched_getcharstr(orig_getcharstr, ...)
+        return M.patched_getcharstr(orig_fn, ...)
     end
 
     _G.skkeleton_for_pickers_minipick_patched = true
 end
 
 function M.on_picker_stop()
-    M.picker_initialized = false
-    M.prev_preedit = ""
     pcall(vim.fn["skkeleton#disable"])
     M.restore_patch()
+    state.stop_session()
 end
 
 function M.restore_patch()
-    if orig_getcharstr then
-        vim.fn.getcharstr = orig_getcharstr
-        orig_getcharstr = nil
+    local orig_fn = state.get_orig_getcharstr()
+    if orig_fn then
+        vim.fn.getcharstr = orig_fn
+        state.set_orig_getcharstr(nil)
     end
-    _G.skkeleton_for_pickers_minipick_patched = nil
     _G.skkeleton_for_pickers_minipick_patched = nil
 end
 

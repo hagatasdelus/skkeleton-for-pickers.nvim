@@ -4,6 +4,8 @@ package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/in
 local pass_count = 0
 local fail_count = 0
 
+local state = require("skkeleton-for-pickers.state")
+
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
@@ -325,7 +327,7 @@ picker_henkan.setup({
 })
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStart" })
 -- Set prev_preedit to the old preedit that backspaces target
-package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽u"
+state.set_prev_preedit("▽u")
 -- Mock getPreEdit to return empty (conversion confirmed)
 local orig_denops_request_L = vim.fn["denops#request"]
 vim.fn["denops#request"] = function(plugin, method, args)
@@ -380,7 +382,7 @@ function _G.MiniPick.set_picker_query(query)
 end
 
 -- Reset prev_preedit to empty (first key press, no prior preedit)
-package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = ""
+state.set_prev_preedit("")
 
 -- Mock denops#request to return "▽k" for getPreEdit
 local orig_denops_request = vim.fn["denops#request"]
@@ -438,7 +440,7 @@ assert_eq(q_case_p[1], "機", "First char should be '機'")
 -- Case Q: Consonant append during preedit (▽き → ▽きn)
 -- Simulates typing 'n' after '▽き', so preedit is "▽きn" and skkeleton returns "n"
 _G.MiniPick.active_picker.query = { "▽", "き" }
-package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽き"
+state.set_prev_preedit("▽き")
 vim.fn["denops#request"] = function(plugin, method, args)
     if plugin == "skkeleton" and method == "getPreEdit" then
         return "▽きn"
@@ -456,7 +458,7 @@ assert_eq(q_case_q[3], "n", "Third char should be 'n'")
 -- Case R: Consonant input duplication (sora -> そら)
 -- Simulates sequential typing of s, o, r, a in direct mode (no marker).
 _G.MiniPick.active_picker.query = {}
-package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = ""
+state.set_prev_preedit("")
 
 -- 1. Type 's' -> getPreEdit returns 's', result = 's'
 vim.fn["denops#request"] = function(plugin, method, args)
@@ -514,7 +516,7 @@ mock.handle_calls = {}
 mock.handle_return = "\8\8\8\8\8▽からす"
 
 _G.MiniPick.active_picker.query = { "▽", "か", "ら", "す", "ま" }
-package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽からすま"
+state.set_prev_preedit("▽からすま")
 
 local del_termcode = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
 fed_char = del_termcode
@@ -544,7 +546,7 @@ mock.handle_calls = {}
 mock.handle_return = "\8\8\8\8\8▽からす"
 
 _G.MiniPick.active_picker.query = { "▽", "か", "ら", "す", "ま" }
-package.loaded["skkeleton-for-pickers.minipick"].prev_preedit = "▽からすま"
+state.set_prev_preedit("▽からすま")
 
 local bs_termcode = vim.api.nvim_replace_termcodes("<BS>", true, true, true)
 fed_char = bs_termcode

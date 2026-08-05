@@ -1,6 +1,7 @@
 local M = {}
 
 local core = require("skkeleton-for-pickers.core")
+local state = require("skkeleton-for-pickers.state")
 
 function M.get_skk_markers()
     local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
@@ -61,9 +62,9 @@ function M.has_skkeleton_marker()
         end
     end
 
-    -- Check skkeleton internal state via vim.g["skkeleton#state"]
-    local state = vim.g["skkeleton#state"]
-    return core.check_marker_in_state(state)
+    -- Check skkeleton internal state via state module
+    local skk_state = state.get_skk_state()
+    return core.check_marker_in_state(skk_state)
 end
 
 function M.call_skk_handle(func, opts)
@@ -114,7 +115,7 @@ function M.call_skk_handle(func, opts)
 
     -- Update g:skkeleton#state
     if ret.state then
-        vim.g["skkeleton#state"] = ret.state
+        state.set_skk_state(ret.state)
     end
 
     local result = ret.result or ""

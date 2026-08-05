@@ -128,8 +128,12 @@ local has_telescope = false
 local has_minipick = false
 local buffer_mod = require("skkeleton-for-pickers.buffer")
 for _, ft in ipairs(buffer_mod.active_fts) do
-    if ft == "TelescopePrompt" then has_telescope = true end
-    if ft == "minipick" then has_minipick = true end
+    if ft == "TelescopePrompt" then
+        has_telescope = true
+    end
+    if ft == "minipick" then
+        has_minipick = true
+    end
 end
 assert_eq(has_telescope, true, "active_fts should contain TelescopePrompt")
 assert_eq(has_minipick, false, "active_fts should NOT contain minipick")
@@ -146,14 +150,22 @@ picker_bypass.setup({
 })
 local minipick_mod = require("skkeleton-for-pickers.minipick")
 minipick_mod.apply_patch()
-assert_eq(_G.skkeleton_for_pickers_minipick_patched, true, "getcharstr should be patched when mini_pick is enabled and active")
+assert_eq(
+    _G.skkeleton_for_pickers_minipick_patched,
+    true,
+    "getcharstr should be patched when mini_pick is enabled and active"
+)
 
 picker_bypass.setup({
     pickers = {
         mini_pick = { enabled = false },
     },
 })
-assert_eq(_G.skkeleton_for_pickers_minipick_patched, nil, "getcharstr patch should be restored when mini_pick is re-disabled")
+assert_eq(
+    _G.skkeleton_for_pickers_minipick_patched,
+    nil,
+    "getcharstr patch should be restored when mini_pick is re-disabled"
+)
 
 -- Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers
 print("Running Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers...")
@@ -170,7 +182,11 @@ picker_bypass.setup({
     },
 })
 
-assert_eq(mock.is_enabled, true, "skkeleton should remain enabled in normal buffer when running setup with mini_pick disabled")
+assert_eq(
+    mock.is_enabled,
+    true,
+    "skkeleton should remain enabled in normal buffer when running setup with mini_pick disabled"
+)
 assert_eq(mock.disabled_count, 0, "skkeleton#disable should NOT be called in normal buffer during setup")
 
 print(string.format("\nconfig_test finished: %d passed, %d failed", pass_count, fail_count))
@@ -179,4 +195,3 @@ if fail_count > 0 then
 else
     os.exit(0)
 end
-

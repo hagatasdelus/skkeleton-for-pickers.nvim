@@ -2,17 +2,20 @@
 local M = {}
 
 local skk = require("skkeleton-for-pickers.skk")
+local core = require("skkeleton-for-pickers.core")
 
 M.picker_initialized = false
 M.is_routing_skk = false
 M.prev_preedit = ""
 local orig_getcharstr = nil
 
--- Cache key termcodes and control characters to avoid repeated Neovim C-API calls
-local DEL_TERMCODE = vim.api.nvim_replace_termcodes("<Del>", true, true, true)
-local BS_TERMCODE = vim.api.nvim_replace_termcodes("<BS>", true, true, true)
-local BSPACE_TERMCODE = vim.api.nvim_replace_termcodes("<Bspace>", true, true, true)
-local NL_TERMCODE = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
+-- Cache key termcodes including <NL> for accurate skkeleton key routing
+local TERMCODES = {
+    del = vim.api.nvim_replace_termcodes("<Del>", true, true, true),
+    bs = vim.api.nvim_replace_termcodes("<BS>", true, true, true),
+    bspace = vim.api.nvim_replace_termcodes("<Bspace>", true, true, true),
+    nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true),
+}
 local IGNORE_CHAR = "\x1c"
 
 -- Check if mini.pick is active and the current window is the prompt window
@@ -32,77 +35,14 @@ local function is_picker_win_active()
     return true
 end
 
--- Strip conversion markers (▽/▼) from the query array
-function M.clean_query_markers(query)
-    local marker_henkan, marker_henkan_select = skk.get_skk_markers()
-    return vim.iter(query)
-        :filter(function(char)
-            return char ~= marker_henkan and char ~= marker_henkan_select
-        end)
-        :totable()
-end
-
--- Remove the previous preedit from the query
-function M.remove_old_preedit(query, prev_preedit, marker_henkan, marker_henkan_select)
-    -- 1. Remove by character count of prev_preedit
-    if prev_preedit and prev_preedit ~= "" then
-        local char_count = vim.fn.strchars(prev_preedit)
-        for _ = 1, char_count do
-            if #query > 0 then
-                table.remove(query)
-            end
-        end
-    end
-
-    local truncate_idx = vim.iter(query):enumerate():find(function(_, char)
-        return char == marker_henkan or char == marker_henkan_select
-    end)
-
-    if truncate_idx then
-        while #query >= truncate_idx do
-            table.remove(query)
-        end
-    end
-end
-
--- Retrieve the current preedit string from skkeleton
-function M.get_current_preedit()
+-- Helper: Retrieve current preedit string from skkeleton
+local function get_current_preedit()
     local cur_preedit = ""
     local ok_preedit, preedit_res = pcall(vim.fn["denops#request"], "skkeleton", "getPreEdit", {})
     if ok_preedit and type(preedit_res) == "string" then
         cur_preedit = preedit_res
     end
     return cur_preedit
-end
-
--- Parse result delta into leading backspace count and the text after it
-function M.parse_result_delta(result)
-    local bs_count = 0
-    if result then
-        while result:sub(bs_count + 1, bs_count + 1) == "\8" do
-            bs_count = bs_count + 1
-        end
-    end
-    local after_bs = result and result:sub(bs_count + 1) or ""
-    return bs_count, after_bs
-end
-
--- Extract confirmed (kakutei) text from result delta
-function M.extract_kakutei(after_bs, cur_preedit)
-    if cur_preedit == "" then
-        return after_bs
-    end
-
-    if #after_bs > #cur_preedit and after_bs:sub(-#cur_preedit) == cur_preedit then
-        -- result = [kakutei][cur_preedit]
-        return after_bs:sub(1, #after_bs - #cur_preedit)
-    elseif after_bs == cur_preedit then
-        -- No kakutei, result is entirely the new preedit
-        return ""
-    else
-        -- Fallback
-        return ""
-    end
 end
 
 -- Process the skkeleton handleKey result and update mini.pick query
@@ -121,101 +61,41 @@ function M.process_skk_result(result)
     end
 
     local marker_henkan, marker_henkan_select = skk.get_skk_markers()
+    local cur_preedit = get_current_preedit()
 
-    -- Remove the old preedit from query before processing the new result
-    M.remove_old_preedit(query, M.prev_preedit, marker_henkan, marker_henkan_select)
+    local new_query, new_prev = core.calculate_new_query({
+        query = query,
+        prev_preedit = M.prev_preedit,
+        result = result,
+        cur_preedit = cur_preedit,
+        marker_henkan = marker_henkan,
+        marker_henkan_select = marker_henkan_select,
+    })
 
-    local cur_preedit = M.get_current_preedit()
-
-    if type(result) == "string" and result ~= "" then
-        local bs_count, after_bs = M.parse_result_delta(result)
-        local kakutei = M.extract_kakutei(after_bs, cur_preedit)
-
-        -- If there was NO old preedit, apply backspaces to the confirmed query text
-        if M.prev_preedit == "" and bs_count > 0 then
-            for _ = 1, bs_count do
-                if #query > 0 then
-                    table.remove(query)
-                end
-            end
-        end
-
-        -- Append kakutei characters
-        if kakutei ~= "" then
-            for char in kakutei:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
-                local byte = char:byte(1)
-                if #char > 1 or (byte >= 32 and byte ~= 127) then
-                    table.insert(query, char)
-                end
-            end
-        end
-    end
-
-    -- Append current preedit characters
-    if cur_preedit ~= "" then
-        for char in cur_preedit:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
-            table.insert(query, char)
-        end
-    end
-
-    M.prev_preedit = cur_preedit
-    MiniPick.set_picker_query(query)
+    M.prev_preedit = new_prev
+    MiniPick.set_picker_query(new_query)
 end
 
 function M.should_route_to_skk(char)
-    if char == DEL_TERMCODE or char == BS_TERMCODE or char == BSPACE_TERMCODE then
-        return true
-    end
-
-    if char:byte(1) == 128 then
-        return false
-    end
-    if char == "\x08" or char == "\x7f" then
-        return true
-    end
-
     local has_marker = skk.has_skkeleton_marker()
-    if has_marker then
-        return true
-    end
-
-    if char == "\r" or char == "\n" or char == "\x1b" then
-        return false
-    end
-
-    if #char > 1 then
-        return true
-    end
-
-    local code = char:byte(1)
-    return code and code >= 32 and code <= 126
+    return core.should_route_to_skk(char, has_marker, TERMCODES)
 end
 
 -- Handle normal key routing to skkeleton
 function M.route_key_to_skk(char)
     M.is_routing_skk = true
 
-    -- Convert DEL_TERMCODE and BS_TERMCODE to Backspace (\x08) when routing to skkeleton
-    local routed_key = char
-    if char == DEL_TERMCODE or char == BS_TERMCODE or char == BSPACE_TERMCODE then
-        routed_key = "\x08"
-    end
+    local routed_key = core.normalize_routed_key(char, TERMCODES)
+    local has_marker = skk.has_skkeleton_marker()
+    local plan = core.get_skk_routing_plan(routed_key, has_marker, TERMCODES)
 
-    if routed_key == "\r" or routed_key == "\n" or routed_key == "\x1b" then
-        if not skk.has_skkeleton_marker() then
-            pcall(vim.fn["skkeleton#disable"])
-            M.is_routing_skk = false
-            return char
-        end
-
-        local skk_key = (routed_key == "\x1b") and "\x07" or NL_TERMCODE
-        local result = skk.call_skk_handle("handleKey", { key = skk_key, expr = true })
-        M.process_skk_result(result)
+    if plan.action == "disable_skk" then
+        pcall(vim.fn["skkeleton#disable"])
         M.is_routing_skk = false
-        return IGNORE_CHAR
+        return char
     end
 
-    local result = skk.call_skk_handle("handleKey", { key = routed_key, expr = true })
+    local result = skk.call_skk_handle("handleKey", { key = plan.skk_key or routed_key, expr = true })
     M.process_skk_result(result)
     M.is_routing_skk = false
     return IGNORE_CHAR
@@ -227,6 +107,12 @@ function M.is_skk_enabled()
     return ok_s and skk_e
 end
 
+-- Side-effect layer helper: Gather markers from Neovim/skk state and pass to core
+local function clean_query_with_markers(query)
+    local m1, m2 = skk.get_skk_markers()
+    return core.clean_query_markers(query, m1, m2)
+end
+
 -- Wrap default_match to support synchronous matching when routing skkeleton keys
 function M.wrap_default_match()
     if _G.MiniPick and not _G.MiniPick.skkeleton_for_pickers_wrapped then
@@ -235,7 +121,7 @@ function M.wrap_default_match()
         _G.MiniPick.default_match = function(stritems, inds, query, opts)
             if M.is_skk_enabled() then
                 opts = vim.tbl_extend("force", {}, opts or {}, { sync = true })
-                query = M.clean_query_markers(query)
+                query = clean_query_with_markers(query)
             end
             return orig_default_match(stritems, inds, query, opts)
         end
@@ -275,7 +161,7 @@ function M.wrap_active_picker_opts()
         local orig_match = opts.source.match
         opts.source.match = function(stritems, inds, query, opts_match)
             if M.is_skk_enabled() then
-                query = M.clean_query_markers(query)
+                query = clean_query_with_markers(query)
             end
             return orig_match(stritems, inds, query, opts_match)
         end

@@ -1,5 +1,7 @@
 local M = {}
 
+local core = require("skkeleton-for-pickers.core")
+
 function M.get_skk_markers()
     local ok_config, cfg = pcall(vim.fn["skkeleton#get_config"])
     if not (ok_config and type(cfg) == "table") then
@@ -20,26 +22,15 @@ function M.get_skkeleton_keymaps(mode)
         end)
         :flatten(1)
         :map(function(map)
-            local rhs = map.rhs or ""
-            local is_skk_action = rhs:find("<Plug>%(skkeleton%-")
-                or rhs:find("skkeleton#enable")
-                or rhs:find("skkeleton#disable")
-                or rhs:find("skkeleton#toggle")
-            if not is_skk_action then
+            local action = core.parse_skk_action(map.rhs)
+            if not action then
                 return nil
-            end
-
-            local action = "toggle"
-            if rhs:find("disable") then
-                action = "disable"
-            elseif rhs:find("enable") then
-                action = "enable"
             end
 
             return {
                 lhs = map.lhs,
                 raw = vim.api.nvim_replace_termcodes(map.lhs, true, true, true),
-                rhs = rhs,
+                rhs = map.rhs,
                 action = action,
                 mode = mode,
             }
@@ -58,19 +49,13 @@ function M.has_skkeleton_marker()
     if pick_active then
         local query = MiniPick.get_picker_query()
         local query_str = table.concat(query)
-        if
-            (marker_henkan ~= "" and query_str:find(marker_henkan, 1, true) ~= nil)
-            or (marker_henkan_select ~= "" and query_str:find(marker_henkan_select, 1, true) ~= nil)
-        then
+        if core.check_marker_in_string(query_str, marker_henkan, marker_henkan_select) then
             return true
         end
     else
         local ok_line, line = pcall(vim.api.nvim_get_current_line)
         if ok_line and line then
-            if
-                (marker_henkan ~= "" and line:find(marker_henkan, 1, true) ~= nil)
-                or (marker_henkan_select ~= "" and line:find(marker_henkan_select, 1, true) ~= nil)
-            then
+            if core.check_marker_in_string(line, marker_henkan, marker_henkan_select) then
                 return true
             end
         end
@@ -78,19 +63,7 @@ function M.has_skkeleton_marker()
 
     -- Check skkeleton internal state via vim.g["skkeleton#state"]
     local state = vim.g["skkeleton#state"]
-    if type(state) == "table" then
-        if state.henkanFeed and state.henkanFeed ~= "" then
-            return true
-        end
-        if
-            state.phase
-            and (state.phase == "henkan" or state.phase == "input:okurinasi" or state.phase == "input:okuriari")
-        then
-            return true
-        end
-    end
-
-    return false
+    return core.check_marker_in_state(state)
 end
 
 function M.call_skk_handle(func, opts)
@@ -114,16 +87,14 @@ function M.call_skk_handle(func, opts)
         notation_map = vim.g["skkeleton#notation#key_to_notation"]
     end)
 
-    local function to_notation(k)
-        if notation_map and notation_map[k] then
-            return notation_map[k]
-        end
-        return k
-    end
     if type(key) == "string" then
-        normalized_opts.key = { to_notation(key) }
+        normalized_opts.key = { core.to_notation(key, notation_map) }
     elseif type(key) == "table" then
-        normalized_opts.key = vim.iter(key):map(to_notation):totable()
+        normalized_opts.key = vim.iter(key)
+            :map(function(k)
+                return core.to_notation(k, notation_map)
+            end)
+            :totable()
     else
         normalized_opts.key = { "" }
     end

@@ -355,7 +355,11 @@ vim.bo[buf_normal].filetype = "markdown"
 vim.api.nvim_set_current_buf(buf_normal)
 
 vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-enable-post" })
-assert_eq(mock.cleared_mappings_count, 0, "skkeleton-enable-post in normal buffer must NOT clear skkeleton buffer mappings")
+assert_eq(
+    mock.cleared_mappings_count,
+    0,
+    "skkeleton-enable-post in normal buffer must NOT clear skkeleton buffer mappings"
+)
 
 print(string.format("\nbuffer_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

@@ -641,7 +641,10 @@ local minipick_mod = package.loaded["skkeleton-for-pickers.minipick"]
 minipick_mod.handle_picker_char("a")
 
 assert_true(set_picker_opts_called, "MiniPick.set_picker_opts should be called during handle_picker_char")
-assert_true(test_opts.mappings.skkeleton_for_pickers_ignore ~= nil, "skkeleton_for_pickers_ignore mapping should be added")
+assert_true(
+    test_opts.mappings.skkeleton_for_pickers_ignore ~= nil,
+    "skkeleton_for_pickers_ignore mapping should be added"
+)
 assert_eq(test_opts.mappings.skkeleton_for_pickers_ignore.char, "\x1c", "ignore char should be Ctrl-\\")
 assert_eq(type(test_opts.mappings.skkeleton_for_pickers_ignore.func), "function", "ignore func should be a function")
 
@@ -663,7 +666,10 @@ fed_char = "\x1b"
 res = vim.fn.getcharstr()
 assert_eq(res, "\x1c", "Esc with empty markers in henkan state should cancel henkan and return ignore char")
 assert_eq(mock.disabled_count, 0, "Skkeleton should not be disabled on Esc during henkan")
-assert_true(#mock.handle_calls > 0 and mock.handle_calls[1].opts.key[1] == "\x07", "Esc during henkan should send cancel (Ctrl-g) key to skkeleton")
+assert_true(
+    #mock.handle_calls > 0 and mock.handle_calls[1].opts.key[1] == "\x07",
+    "Esc during henkan should send cancel (Ctrl-g) key to skkeleton"
+)
 
 -- Case X: Esc with empty markers in non-henkan state
 reset_mock()
@@ -718,7 +724,10 @@ for _, m in ipairs(buf_maps_z) do
         has_skk_buf_map = true
     end
 end
-assert_true(not has_skk_buf_map, "Buffer-local skkeleton keymaps should be cleared in minipick prompt to prevent getcharstr conflict")
+assert_true(
+    not has_skk_buf_map,
+    "Buffer-local skkeleton keymaps should be cleared in minipick prompt to prevent getcharstr conflict"
+)
 
 -- 2nd keystroke: 'i' -> routed to skkeleton and converts to 'い'
 mock.handle_calls = {}
@@ -755,7 +764,10 @@ for _, km in ipairs(keymaps_cc) do
         found_handle_keymap = true
     end
 end
-assert_true(not found_handle_keymap, "skkeleton#handle('handleKey', ...) mapping should be excluded from toggle derivation")
+assert_true(
+    not found_handle_keymap,
+    "skkeleton#handle('handleKey', ...) mapping should be excluded from toggle derivation"
+)
 
 -- Simulate MiniPickStop event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })

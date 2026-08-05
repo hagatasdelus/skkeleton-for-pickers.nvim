@@ -1,6 +1,7 @@
 local M = {}
 
 local skk = require("skkeleton-for-pickers.skk")
+local core = require("skkeleton-for-pickers.core")
 
 M.active_fts = {}
 
@@ -43,7 +44,9 @@ function M.handle_skkeleton_enable_post(is_minipick_enabled)
     if vim.b[buf].skkeleton_for_pickers_cr_wrapped then
         M.apply_cr_map(buf)
     end
-    local is_minipick_active = _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" and _G.MiniPick.is_picker_active()
+    local is_minipick_active = _G.MiniPick
+        and type(_G.MiniPick.is_picker_active) == "function"
+        and _G.MiniPick.is_picker_active()
     if is_minipick_enabled and is_minipick_active and vim.bo[buf].filetype == "minipick" then
         pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
     end
@@ -53,13 +56,18 @@ function M.setup_buffer()
     local buf = vim.api.nvim_get_current_buf()
     local ft = vim.bo[buf].filetype
 
-    if not vim.tbl_contains(M.active_fts, ft) then
+    local plan = core.plan_buffer_setup({
+        ft = ft,
+        is_active_ft = vim.tbl_contains(M.active_fts, ft),
+        skk_enabled = (vim.b[buf].skkeleton == true),
+        cr_wrapped = (vim.b[buf].skkeleton_for_pickers_cr_wrapped == true),
+    })
+
+    if plan.action == "skip" then
         return
     end
 
-    -- Skip setup for mini.pick prompt buffer since it does not use insert-mode mappings
-    -- and we handle its initialization dynamically in the getcharstr patch.
-    if ft == "minipick" then
+    if plan.action == "patch_minipick" then
         require("skkeleton-for-pickers.minipick").apply_patch()
         return
     end
@@ -82,9 +90,7 @@ function M.setup_buffer()
     end
 
     local maps = vim.api.nvim_buf_get_keymap(buf, "i")
-    local map = vim.iter(maps):find(function(m)
-        return m.lhs:upper() == "<CR>"
-    end)
+    local map = core.find_cr_map(maps)
 
     if not map then
         return

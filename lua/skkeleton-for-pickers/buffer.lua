@@ -10,7 +10,12 @@ function M.handle_cr_key(buf)
     buf = buf or vim.api.nvim_get_current_buf()
     local has_skk, is_enabled = pcall(vim.fn["skkeleton#is_enabled"])
 
-    if has_skk and is_enabled and skk.has_skkeleton_marker() then
+    -- Since handle_cr_key is exclusively for the CR wrapper of the picker prompt (which is always a single line),
+    -- the first line matches the entire prompt input. It is assumed not to be called from a multi-line buffer.
+    local ok_line, line = pcall(vim.api.nvim_buf_get_lines, buf, 0, 1, false)
+    local line_str = (ok_line and line and line[1]) or ""
+
+    if has_skk and is_enabled and skk.has_skkeleton_marker(line_str) then
         local nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true)
         pcall(vim.fn["skkeleton#handle"], "handleKey", { key = nl })
         return
@@ -65,13 +70,8 @@ function M.setup_buffer()
         cr_wrapped = buf_ctx.cr_wrapped,
     })
 
-    if plan.action == "skip" then
-        return
-    end
-
-    if plan.action == "patch_minipick" then
-        require("skkeleton-for-pickers.minipick").apply_patch()
-        return
+    if plan.action == "skip" or plan.action == "patch_minipick" then
+        return plan.action
     end
 
     state.mark_skk_enabled(buf, true)

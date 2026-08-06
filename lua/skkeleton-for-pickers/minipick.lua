@@ -72,8 +72,19 @@ function M.process_skk_result(result)
     MiniPick.set_picker_query(new_query)
 end
 
+local function get_current_picker_query_str()
+    if _G.MiniPick and type(_G.MiniPick.get_picker_query) == "function" then
+        local q = MiniPick.get_picker_query()
+        if type(q) == "table" then
+            return table.concat(q)
+        end
+    end
+    return ""
+end
+
 function M.should_route_to_skk(char)
-    local has_marker = skk.has_skkeleton_marker()
+    local query_str = get_current_picker_query_str()
+    local has_marker = skk.has_skkeleton_marker(query_str)
     return core.should_route_to_skk(char, has_marker, TERMCODES)
 end
 
@@ -81,8 +92,9 @@ end
 function M.route_key_to_skk(char)
     state.set_routing_skk(true)
 
+    local query_str = get_current_picker_query_str()
     local routed_key = core.normalize_routed_key(char, TERMCODES)
-    local has_marker = skk.has_skkeleton_marker()
+    local has_marker = skk.has_skkeleton_marker(query_str)
     local plan = core.get_skk_routing_plan(routed_key, has_marker, TERMCODES)
 
     if plan.action == "disable_skk" then
@@ -91,7 +103,7 @@ function M.route_key_to_skk(char)
         return char
     end
 
-    local result = skk.call_skk_handle("handleKey", { key = plan.skk_key or routed_key, expr = true })
+    local result = skk.call_skk_handle("handleKey", { key = plan.skk_key or routed_key, expr = true }, query_str)
     M.process_skk_result(result)
     state.set_routing_skk(false)
     return IGNORE_CHAR
@@ -189,7 +201,8 @@ function M.handle_toggle_key(action)
 
     if should_enable and not skk_enabled then
         state.set_routing_skk(true)
-        skk.call_skk_handle("enable", { expr = true })
+        local query_str = get_current_picker_query_str()
+        skk.call_skk_handle("enable", { expr = true }, query_str)
         pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
         state.set_routing_skk(false)
     elseif not should_enable and skk_enabled then

@@ -39,26 +39,12 @@ function M.get_skkeleton_keymaps(mode)
         :totable()
 end
 
-function M.has_skkeleton_marker()
+function M.has_skkeleton_marker(input_str)
     local marker_henkan, marker_henkan_select = M.get_skk_markers()
 
-    -- If mini.pick is active, check the picker query
-    local pick_active = false
-    if _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" then
-        pick_active = _G.MiniPick.is_picker_active()
-    end
-    if pick_active then
-        local query = MiniPick.get_picker_query()
-        local query_str = table.concat(query)
-        if core.check_marker_in_string(query_str, marker_henkan, marker_henkan_select) then
+    if input_str and input_str ~= "" then
+        if core.check_marker_in_string(input_str, marker_henkan, marker_henkan_select) then
             return true
-        end
-    else
-        local ok_line, line = pcall(vim.api.nvim_get_current_line)
-        if ok_line and line then
-            if core.check_marker_in_string(line, marker_henkan, marker_henkan_select) then
-                return true
-            end
         end
     end
 
@@ -67,17 +53,9 @@ function M.has_skkeleton_marker()
     return core.check_marker_in_state(skk_state)
 end
 
-function M.call_skk_handle(func, opts)
-    -- Build prevInput from the current mini.pick query
-    local query_str = ""
-    local pick_active = false
-    if _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" then
-        pick_active = _G.MiniPick.is_picker_active()
-    end
-    if pick_active then
-        local query = MiniPick.get_picker_query()
-        query_str = table.concat(query)
-    end
+function M.call_skk_handle(func, opts, current_text)
+    -- Build prevInput from injected current_text
+    local query_str = current_text or ""
 
     -- Replicate key normalization from skkeleton#handle
     local normalized_opts = vim.deepcopy(opts)

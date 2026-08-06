@@ -40,7 +40,12 @@ function M.setup(opts)
     if #buffer.active_fts > 0 then
         vim.api.nvim_create_autocmd({ "FileType", "BufEnter", "WinEnter", "InsertEnter" }, {
             group = group,
-            callback = buffer.setup_buffer,
+            callback = function()
+                local action = buffer.setup_buffer()
+                if action == "patch_minipick" and is_minipick_enabled then
+                    minipick.apply_patch()
+                end
+            end,
         })
 
         -- When skkeleton enables, it overwrites all buffer-local mappings

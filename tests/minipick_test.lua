@@ -771,6 +771,68 @@ assert_true(
     "skkeleton#handle('handleKey', ...) mapping should be excluded from toggle derivation"
 )
 
+-- Case DD: Denops failure handling in route_key_to_skk (Verifies 07-3 guard)
+reset_mock()
+mock.is_enabled = true
+_G.MiniPick = {
+    active_picker = { query = { "▽", "か", "ん" }, caret = 4 },
+    is_picker_active_val = true,
+    is_picker_active = function()
+        return true
+    end,
+    get_picker_query = function()
+        return _G.MiniPick.active_picker.query
+    end,
+    set_picker_query = function(q)
+        _G.MiniPick.active_picker.query = q
+    end,
+}
+state.set_prev_preedit("▽かん")
+
+local skk_mod = require("skkeleton-for-pickers.skk")
+local orig_call_skk = skk_mod.call_skk_handle
+skk_mod.call_skk_handle = function()
+    return nil
+end
+
+-- Test route_key_to_skk returns raw char (not IGNORE_CHAR) when Denops fails
+local res_dd = minipick_mod.route_key_to_skk("a")
+assert_eq(res_dd, "a", "route_key_to_skk should return raw char when Denops request returns nil")
+
+-- Test query is not modified when call_skk_handle returns nil
+local q_dd = _G.MiniPick.get_picker_query()
+assert_eq(#q_dd, 3, "Query should retain original length when Denops returns nil")
+assert_eq(q_dd[1], "▽", "Query should retain first char when Denops returns nil")
+assert_eq(q_dd[2], "か", "Query should retain second char when Denops returns nil")
+
+skk_mod.call_skk_handle = orig_call_skk
+
+-- Case EE: Direct process_skk_result(nil) call (Verifies 07-2 guard independently)
+reset_mock()
+mock.is_enabled = true
+_G.MiniPick = {
+    active_picker = { query = { "▽", "か", "ん" }, caret = 4 },
+    is_picker_active_val = true,
+    is_picker_active = function()
+        return true
+    end,
+    get_picker_query = function()
+        return _G.MiniPick.active_picker.query
+    end,
+    set_picker_query = function(q)
+        _G.MiniPick.active_picker.query = q
+    end,
+}
+state.set_prev_preedit("▽かん")
+
+minipick_mod.process_skk_result(nil)
+
+local q_ee = _G.MiniPick.get_picker_query()
+assert_eq(#q_ee, 3, "process_skk_result(nil) should not modify query length")
+assert_eq(q_ee[1], "▽", "process_skk_result(nil) should retain first char")
+assert_eq(q_ee[2], "か", "process_skk_result(nil) should retain second char")
+assert_eq(q_ee[3], "ん", "process_skk_result(nil) should retain third char")
+
 -- Simulate MiniPickStop event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
 

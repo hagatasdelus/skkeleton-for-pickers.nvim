@@ -43,6 +43,10 @@ end
 
 -- Process the skkeleton handleKey result and update mini.pick query
 function M.process_skk_result(result)
+    if result == nil then
+        return
+    end
+
     if result == " \8" then
         return
     end
@@ -104,6 +108,12 @@ function M.route_key_to_skk(char)
     end
 
     local result = skk.call_skk_handle("handleKey", { key = plan.skk_key or routed_key, expr = true }, query_str)
+    if result == nil then
+        state.set_routing_skk(false)
+        -- return raw char to passthrough on Denops failure
+        return char
+    end
+
     M.process_skk_result(result)
     state.set_routing_skk(false)
     return IGNORE_CHAR

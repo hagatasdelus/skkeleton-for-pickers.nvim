@@ -23,9 +23,9 @@ local function is_picker_win_active()
         return false
     end
     if type(_G.MiniPick.get_picker_state) == "function" then
-        local state = _G.MiniPick.get_picker_state()
-        if state and state.windows and state.windows.main then
-            return vim.api.nvim_get_current_win() == state.windows.main
+        local picker_state = _G.MiniPick.get_picker_state()
+        if picker_state and picker_state.windows and picker_state.windows.main then
+            return vim.api.nvim_get_current_win() == picker_state.windows.main
         end
     end
     return true

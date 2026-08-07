@@ -106,6 +106,7 @@ end
 
 -- Load the plugin
 local picker = require("skkeleton-for-pickers")
+local buffer = require("skkeleton-for-pickers.buffer")
 
 -- Test 2: Buffer Setup and Keymaps
 print("Running Test 2: Buffer Setup and Keymaps...")
@@ -360,6 +361,38 @@ assert_eq(
     0,
     "skkeleton-enable-post in normal buffer must NOT clear skkeleton buffer mappings"
 )
+
+-- Test 7: Re-setup clear past BufLeave/BufDelete autocmds without duplication
+print("Running Test 7: Re-setup autocmd de-duplication...")
+reset_mock()
+
+local buf_ac = vim.api.nvim_create_buf(false, true)
+vim.bo[buf_ac].filetype = "TelescopePrompt"
+vim.api.nvim_set_current_buf(buf_ac)
+vim.keymap.set("i", "<CR>", function() end, { buffer = buf_ac })
+
+picker.setup({
+    pickers = { telescope = { enabled = true } },
+})
+buffer.setup_buffer()
+
+-- Simulate re-setup / config reload
+local buf_ac2 = vim.api.nvim_create_buf(false, true)
+vim.bo[buf_ac2].filetype = "TelescopePrompt"
+vim.api.nvim_set_current_buf(buf_ac2)
+vim.keymap.set("i", "<CR>", function() end, { buffer = buf_ac2 })
+
+picker.setup({
+    pickers = { telescope = { enabled = true } },
+})
+buffer.setup_buffer()
+
+local autocmds_buf1 = vim.api.nvim_get_autocmds({ buffer = buf_ac, event = { "BufLeave", "BufDelete" } })
+assert_eq(#autocmds_buf1, 0, "BufLeave/BufDelete autocmd on old buffer should be cleared after re-setup")
+
+local autocmds_buf2 = vim.api.nvim_get_autocmds({ buffer = buf_ac2, event = { "BufLeave", "BufDelete" } })
+assert_eq(#autocmds_buf2, 2, "BufLeave/BufDelete autocmd on new buffer should be registered after re-setup")
+
 
 print(string.format("\nbuffer_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

@@ -104,6 +104,7 @@ function M.setup_buffer()
 
     -- Disable skkeleton when leaving the picker buffer
     vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
+        group = "SkkeletonForPickers",
         buffer = buf,
         once = true,
         callback = function()

@@ -24,19 +24,26 @@ function M.handle_cr_key(buf)
     pcall(vim.fn["skkeleton#disable"])
 
     local orig = state.get_original_cr(buf)
-    if orig and orig.callback then
-        orig.callback()
+    local plan = core.eval_original_cr_plan(orig)
+
+    if plan.type == "callback_direct" and plan.callback then
+        plan.callback()
         return
     end
 
-    if orig and orig.rhs then
-        local keys = vim.api.nvim_replace_termcodes(orig.rhs, true, true, true)
-        vim.api.nvim_feedkeys(keys, orig.noremap == 1 and "n" or "m", false)
-        return
+    local keys_to_feed = nil
+    if plan.type == "rhs_direct" or plan.type == "fallback" then
+        keys_to_feed = plan.keys
     end
 
-    local cr = vim.api.nvim_replace_termcodes("<CR>", true, true, true)
-    vim.api.nvim_feedkeys(cr, "n", false)
+    if keys_to_feed then
+        local final_keys = keys_to_feed
+        if plan.replace_termcodes then
+            final_keys = vim.api.nvim_replace_termcodes(keys_to_feed, true, true, true)
+        end
+        vim.api.nvim_feedkeys(final_keys, plan.mode or "n", false)
+        return
+    end
 end
 
 function M.apply_cr_map(buf)

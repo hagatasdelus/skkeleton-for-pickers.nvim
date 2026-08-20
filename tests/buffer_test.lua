@@ -297,6 +297,7 @@ assert_eq(mock.disabled_count, 0, "Should NOT disable skkeleton when custom mark
 assert_eq(original_cr_called, 0, "Original CR should NOT be called when custom marker is present")
 
 -- Test 5: skkeleton-enable-post re-applies CR mapping
+
 print("Running Test 5: skkeleton-enable-post re-applies CR mapping...")
 reset_mock()
 local buf3 = vim.api.nvim_create_buf(false, true)
@@ -392,7 +393,6 @@ assert_eq(#autocmds_buf1, 0, "BufLeave/BufDelete autocmd on old buffer should be
 
 local autocmds_buf2 = vim.api.nvim_get_autocmds({ buffer = buf_ac2, event = { "BufLeave", "BufDelete" } })
 assert_eq(#autocmds_buf2, 2, "BufLeave/BufDelete autocmd on new buffer should be registered after re-setup")
-
 
 print(string.format("\nbuffer_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

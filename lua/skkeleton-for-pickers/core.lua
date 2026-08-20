@@ -100,28 +100,67 @@ function M.check_marker_in_state(state)
     return false
 end
 
---- Parse skkeleton action type from RHS string
----@param rhs string|nil
+--- Parse skkeleton action type from RHS string or maparg table
+---@param rhs_or_map string|table|nil
 ---@return string|nil action ("enable"|"disable"|"toggle")
-function M.parse_skk_action(rhs)
-    if not rhs or type(rhs) ~= "string" then
+function M.parse_skk_action(rhs_or_map)
+    if not rhs_or_map then
         return nil
     end
-    local is_skk_action = rhs:find("<Plug>%(skkeleton%-")
-        or rhs:find("skkeleton#enable")
-        or rhs:find("skkeleton#disable")
-        or rhs:find("skkeleton#toggle")
-    if not is_skk_action then
-        return nil
+    local rhs = type(rhs_or_map) == "string" and rhs_or_map or (type(rhs_or_map) == "table" and rhs_or_map.rhs)
+    local desc = type(rhs_or_map) == "table" and rhs_or_map.desc
+
+    if rhs and type(rhs) == "string" then
+        if rhs:find("<Plug>%(skkeleton%-disable%)") or rhs:find("skkeleton#disable") then
+            return "disable"
+        elseif rhs:find("<Plug>%(skkeleton%-enable%)") or rhs:find("skkeleton#enable") then
+            return "enable"
+        elseif rhs:find("<Plug>%(skkeleton%-toggle%)") or rhs:find("skkeleton#toggle") then
+            return "toggle"
+        end
     end
 
-    if rhs:find("<Plug>%(skkeleton%-disable%)") or rhs:find("skkeleton#disable") then
-        return "disable"
-    elseif rhs:find("<Plug>%(skkeleton%-enable%)") or rhs:find("skkeleton#enable") then
-        return "enable"
+    if desc and type(desc) == "string" and desc:find("skkeleton") then
+        if desc:find("disable") then
+            return "disable"
+        elseif desc:find("enable") then
+            return "enable"
+        elseif desc:find("toggle") then
+            return "toggle"
+        end
     end
 
-    return "toggle"
+    return nil
+end
+
+--- Evaluate original CR keymap and return execution plan for feedkeys/callback
+--- Pure function: performs NO side effects, API calls, or feedkeys execution.
+---@param orig table|nil original keymap dictionary (from maparg/nvim_buf_get_keymap)
+---@return table plan Execution plan table
+function M.eval_original_cr_plan(orig)
+    if not orig then
+        return { type = "fallback", keys = "<CR>", replace_termcodes = true, mode = "n" }
+    end
+
+    -- Case 1: Callback function
+    if orig.callback and type(orig.callback) == "function" then
+        return {
+            type = "callback_direct",
+            callback = orig.callback,
+        }
+    end
+
+    -- Case 2: String RHS
+    if orig.rhs and type(orig.rhs) == "string" and orig.rhs ~= "" then
+        return {
+            type = "rhs_direct",
+            keys = orig.rhs,
+            replace_termcodes = true,
+            mode = (orig.noremap == 1) and "n" or "m",
+        }
+    end
+
+    return { type = "fallback", keys = "<CR>", replace_termcodes = true, mode = "n" }
 end
 
 --- Convert key notation

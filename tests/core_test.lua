@@ -137,6 +137,47 @@ local plan_marker = core.get_skk_routing_plan("\r", true, dummy_termcodes)
 assert_eq(plan_marker.action, "handle_key", "routing plan handle_key for CR with marker")
 assert_eq(plan_marker.skk_key, "<NL_KEY>", "routing plan key uses injected termcodes.nl")
 
+-- Test 09-1: Enhanced parse_skk_action
+print("Running Test 09-1: Enhanced parse_skk_action...")
+assert_eq(core.parse_skk_action("<Plug>(skkeleton-enable)"), "enable", "parse rhs enable")
+assert_eq(core.parse_skk_action("<Plug>(skkeleton-disable)"), "disable", "parse rhs disable")
+assert_eq(core.parse_skk_action("<Plug>(skkeleton-toggle)"), "toggle", "parse rhs toggle")
+assert_eq(core.parse_skk_action({ rhs = "<Plug>(skkeleton-toggle)" }), "toggle", "parse map table with rhs")
+assert_eq(
+    core.parse_skk_action({ callback = function() end, desc = "skkeleton toggle" }),
+    "toggle",
+    "parse map with desc toggle"
+)
+assert_eq(
+    core.parse_skk_action({ callback = function() end, desc = "skkeleton enable" }),
+    "enable",
+    "parse map with desc enable"
+)
+assert_eq(core.parse_skk_action({ callback = function() end }), nil, "strict parse: no desc or rhs returns nil")
+
+-- Test 09-2: eval_original_cr_plan pure function
+print("Running Test 09-2: eval_original_cr_plan pure function...")
+
+-- Case 1: nil orig -> fallback
+local p1 = core.eval_original_cr_plan(nil)
+assert_eq(p1.type, "fallback", "nil orig type fallback")
+assert_eq(p1.keys, "<CR>", "nil orig keys <CR>")
+assert_eq(p1.replace_termcodes, true, "nil orig replace_termcodes true")
+assert_eq(p1.mode, "n", "nil orig mode n")
+
+-- Case 2: Direct callback
+local dummy_fn = function() end
+local p2 = core.eval_original_cr_plan({ callback = dummy_fn })
+assert_eq(p2.type, "callback_direct", "callback direct type")
+assert_eq(p2.callback, dummy_fn, "callback direct function match")
+
+-- Case 3: Direct RHS string
+local p3 = core.eval_original_cr_plan({ rhs = "<Cmd>confirm<CR>", noremap = 1 })
+assert_eq(p3.type, "rhs_direct", "rhs direct type")
+assert_eq(p3.keys, "<Cmd>confirm<CR>", "rhs direct keys match")
+assert_eq(p3.replace_termcodes, true, "rhs direct replace_termcodes true")
+assert_eq(p3.mode, "n", "rhs direct mode n")
+
 print(string.format("\ncore_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then
     os.exit(1)

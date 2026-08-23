@@ -1,4 +1,3 @@
--- tests/minipick_test.lua
 package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
 local pass_count = 0
@@ -9,8 +8,18 @@ local state = require("skkeleton-for-pickers.state")
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
         print(
-            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+            string.format(
+                "%sFAIL: expected '%s', got '%s'. Context: %s",
+                loc,
+                tostring(expected),
+                tostring(actual),
+                msg or ""
+            )
         )
     else
         pass_count = pass_count + 1
@@ -20,7 +29,11 @@ end
 local function assert_true(cond, msg)
     if not cond then
         fail_count = fail_count + 1
-        print(string.format("FAIL: expected true, got false. Context: %s", msg or ""))
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
+        print(string.format("%sFAIL: expected true, got false. Context: %s", loc, msg or ""))
     else
         pass_count = pass_count + 1
     end
@@ -841,6 +854,13 @@ assert_eq(_G.skkeleton_for_pickers_minipick_patched, nil, "getcharstr patch shou
 assert_eq(vim.fn.getcharstr, orig_fn_getcharstr, "getcharstr should be restored to original function")
 
 _G.MiniPick = nil
+
+-- Cleanup test buffers
+for _, b in ipairs({ buf_toggle, buf_z }) do
+    if b and vim.api.nvim_buf_is_valid(b) then
+        vim.api.nvim_buf_delete(b, { force = true })
+    end
+end
 
 print(string.format("\nminipick_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

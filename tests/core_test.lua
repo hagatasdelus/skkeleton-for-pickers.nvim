@@ -1,4 +1,3 @@
--- tests/core_test.lua
 package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
 local pass_count = 0
@@ -19,7 +18,11 @@ local function assert_eq(actual, expected, msg)
         end
         if not ok then
             fail_count = fail_count + 1
-            print(string.format("FAIL: table mismatch. Context: %s", msg or ""))
+            local info = debug.getinfo(2, "Sl")
+            local loc = (info and info.short_src and info.currentline)
+                    and string.format("[%s:%d] ", info.short_src, info.currentline)
+                or ""
+            print(string.format("%sFAIL: table mismatch. Context: %s", loc, msg or ""))
             return
         end
         pass_count = pass_count + 1
@@ -28,8 +31,18 @@ local function assert_eq(actual, expected, msg)
 
     if actual ~= expected then
         fail_count = fail_count + 1
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
         print(
-            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+            string.format(
+                "%sFAIL: expected '%s', got '%s'. Context: %s",
+                loc,
+                tostring(expected),
+                tostring(actual),
+                msg or ""
+            )
         )
     else
         pass_count = pass_count + 1

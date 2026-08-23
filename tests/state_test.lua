@@ -1,16 +1,26 @@
 package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
+local pass_count = 0
+local fail_count = 0
+
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
-        error(
+        fail_count = fail_count + 1
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
+        print(
             string.format(
-                "ASSERTION FAILED: %s (Expected: %s, Got: %s)",
-                msg or "",
+                "%sFAIL: expected '%s', got '%s'. Context: %s",
+                loc,
                 tostring(expected),
-                tostring(actual)
-            ),
-            2
+                tostring(actual),
+                msg or ""
+            )
         )
+    else
+        pass_count = pass_count + 1
     end
 end
 
@@ -72,4 +82,9 @@ assert_eq(state.get_skk_state(), "henkan", "get_skk_state")
 assert_eq(vim.g["skkeleton#state"], "henkan", "vim.g['skkeleton#state']")
 
 vim.api.nvim_buf_delete(buf, { force = true })
-print("state_test finished successfully!")
+print(string.format("\nstate_test finished: %d passed, %d failed", pass_count, fail_count))
+if fail_count > 0 then
+    os.exit(1)
+else
+    os.exit(0)
+end

@@ -1,4 +1,3 @@
--- tests/config_test.lua
 package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
 local pass_count = 0
@@ -7,8 +6,18 @@ local fail_count = 0
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
         print(
-            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+            string.format(
+                "%sFAIL: expected '%s', got '%s'. Context: %s",
+                loc,
+                tostring(expected),
+                tostring(actual),
+                msg or ""
+            )
         )
     else
         pass_count = pass_count + 1
@@ -188,6 +197,10 @@ assert_eq(
     "skkeleton should remain enabled in normal buffer when running setup with mini_pick disabled"
 )
 assert_eq(mock.disabled_count, 0, "skkeleton#disable should NOT be called in normal buffer during setup")
+
+if normal_buf and vim.api.nvim_buf_is_valid(normal_buf) then
+    vim.api.nvim_buf_delete(normal_buf, { force = true })
+end
 
 print(string.format("\nconfig_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

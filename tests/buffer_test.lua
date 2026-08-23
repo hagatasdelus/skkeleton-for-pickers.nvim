@@ -1,4 +1,3 @@
--- tests/buffer_test.lua
 package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
 local pass_count = 0
@@ -7,8 +6,18 @@ local fail_count = 0
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
         print(
-            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+            string.format(
+                "%sFAIL: expected '%s', got '%s'. Context: %s",
+                loc,
+                tostring(expected),
+                tostring(actual),
+                msg or ""
+            )
         )
     else
         pass_count = pass_count + 1
@@ -18,7 +27,11 @@ end
 local function assert_true(cond, msg)
     if not cond then
         fail_count = fail_count + 1
-        print(string.format("FAIL: expected true, got false. Context: %s", msg or ""))
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
+        print(string.format("%sFAIL: expected true, got false. Context: %s", loc, msg or ""))
     else
         pass_count = pass_count + 1
     end
@@ -393,6 +406,14 @@ assert_eq(#autocmds_buf1, 0, "BufLeave/BufDelete autocmd on old buffer should be
 
 local autocmds_buf2 = vim.api.nvim_get_autocmds({ buffer = buf_ac2, event = { "BufLeave", "BufDelete" } })
 assert_eq(#autocmds_buf2, 2, "BufLeave/BufDelete autocmd on new buffer should be registered after re-setup")
+
+-- Cleanup test buffers
+local buffers_to_delete = { buf, buf3, buf_normal, buf_ac, buf_ac2 }
+for _, b in ipairs(buffers_to_delete) do
+    if b and vim.api.nvim_buf_is_valid(b) then
+        vim.api.nvim_buf_delete(b, { force = true })
+    end
+end
 
 print(string.format("\nbuffer_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

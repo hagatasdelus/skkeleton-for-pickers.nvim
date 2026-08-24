@@ -274,8 +274,8 @@ buffer.setup_buffer()
 vim.api.nvim_set_current_buf(dummy_other_buf)
 assert_eq(mock.disabled_count, 1, "Leaving TelescopePrompt without CR map should still call skkeleton#disable")
 
--- Test 8: Repeated buffer leave (drop once=true) disables skkeleton on second leave
-print("Running Test 8: Repeated buffer leave disables skkeleton on second leave...")
+-- Test 8: Buffer cleanup autocmd persists without once=true
+print("Running Test 8: Buffer cleanup autocmd persists without once=true...")
 local buf8 = vim.api.nvim_create_buf(false, true)
 vim.bo[buf8].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf8)
@@ -285,18 +285,20 @@ mock.is_enabled = true
 vim.keymap.set("i", "<CR>", function() end, { buffer = buf8 })
 buffer.setup_buffer()
 
--- First leave
-vim.api.nvim_set_current_buf(dummy_other_buf)
-assert_eq(mock.disabled_count, 1, "First leave should disable skkeleton")
+-- Directly inspect registered autocmds for once=false
+local autocmds = vim.api.nvim_get_autocmds({
+    group = state.AUGROUP_NAME,
+    buffer = buf8,
+    event = { "BufLeave", "BufDelete" },
+})
+assert_true(#autocmds > 0, "BufLeave/BufDelete autocmds should be registered for buf8")
+for _, ac in ipairs(autocmds) do
+    assert_eq(ac.once, false, "Autocmd must not have once=true so it persists across buffer leaves")
+end
 
--- Re-enter buf8 and re-enable skkeleton without calling setup_buffer() again
-vim.api.nvim_set_current_buf(buf8)
-reset_mock()
-mock.is_enabled = true
-
--- Second leave (autocmd from initial setup must persist because once=true was removed)
+-- Verify leave disables skkeleton
 vim.api.nvim_set_current_buf(dummy_other_buf)
-assert_eq(mock.disabled_count, 1, "Second leave without re-setup should also disable skkeleton (no once=true)")
+assert_eq(mock.disabled_count, 1, "Leaving buffer should disable skkeleton")
 
 -- Cleanup buffers
 local buffers_to_delete = { buf1, buf2, buf_rhs, buf_fallback, buf5, buf6, buf7, buf8, dummy_other_buf }

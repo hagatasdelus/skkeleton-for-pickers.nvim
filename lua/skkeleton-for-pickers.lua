@@ -25,7 +25,7 @@ function M.setup(opts)
     end
 
     -- Always clear/re-create augroup on setup
-    local group = vim.api.nvim_create_augroup("SkkeletonForPickers", { clear = true })
+    local group = vim.api.nvim_create_augroup(state.AUGROUP_NAME, { clear = true })
 
     if not is_minipick_enabled then
         local is_minipick_active = _G.MiniPick

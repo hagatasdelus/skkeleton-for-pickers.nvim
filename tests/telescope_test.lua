@@ -289,15 +289,14 @@ buffer.setup_buffer()
 vim.api.nvim_set_current_buf(dummy_other_buf)
 assert_eq(mock.disabled_count, 1, "First leave should disable skkeleton")
 
--- Re-enter buf8 and re-enable skkeleton
+-- Re-enter buf8 and re-enable skkeleton without calling setup_buffer() again
 vim.api.nvim_set_current_buf(buf8)
 reset_mock()
 mock.is_enabled = true
-buffer.setup_buffer() -- setup_buffer might return early because cr_wrapped is true
 
--- Second leave
+-- Second leave (autocmd from initial setup must persist because once=true was removed)
 vim.api.nvim_set_current_buf(dummy_other_buf)
-assert_eq(mock.disabled_count, 1, "Second leave should also disable skkeleton (no once=true)")
+assert_eq(mock.disabled_count, 1, "Second leave without re-setup should also disable skkeleton (no once=true)")
 
 -- Cleanup buffers
 local buffers_to_delete = { buf1, buf2, buf_rhs, buf_fallback, buf5, buf6, buf7, buf8, dummy_other_buf }

@@ -96,7 +96,10 @@ function M.call_skk_handle(func, opts, current_text)
         state.set_skk_state(ret.state)
     end
 
-    local result = ret.result or ""
+    local result = ret.result
+    if type(result) ~= "string" then
+        result = ""
+    end
 
     -- Handle <Cmd>...<CR> results
     if result:find("^<Cmd>") then

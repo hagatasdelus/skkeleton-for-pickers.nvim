@@ -172,6 +172,11 @@ assert_eq(
     "parse map with desc enable"
 )
 assert_eq(core.parse_skk_action({ callback = function() end }), nil, "strict parse: no desc or rhs returns nil")
+assert_eq(
+    core.parse_skk_action({ rhs = "<Cmd>SomeHelper<CR>", desc = "skkeleton toggle candidate window" }),
+    nil,
+    "string rhs map with skkeleton desc should NOT be parsed as skk action"
+)
 
 -- Test 09-2: eval_original_cr_plan pure function
 print("Running Test 09-2: eval_original_cr_plan pure function...")

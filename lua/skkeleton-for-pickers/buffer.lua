@@ -83,14 +83,14 @@ function M.setup_buffer()
 
     -- Clear any existing BufLeave/BufDelete autocmds for this buffer to prevent duplicates on repeated setup
     vim.api.nvim_clear_autocmds({
-        group = "SkkeletonForPickers",
+        group = state.AUGROUP_NAME,
         buffer = buf,
         event = { "BufLeave", "BufDelete" },
     })
 
     -- Disable skkeleton when leaving the picker buffer
     vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
-        group = "SkkeletonForPickers",
+        group = state.AUGROUP_NAME,
         buffer = buf,
         callback = function()
             pcall(vim.fn["skkeleton#disable"])

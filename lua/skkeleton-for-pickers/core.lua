@@ -120,7 +120,8 @@ function M.parse_skk_action(rhs_or_map)
         end
     end
 
-    if desc and type(desc) == "string" and desc:find("skkeleton") then
+    local has_callback = type(rhs_or_map) == "table" and type(rhs_or_map.callback) == "function"
+    if has_callback and desc and type(desc) == "string" and desc:find("skkeleton") then
         if desc:find("disable") then
             return "disable"
         elseif desc:find("enable") then

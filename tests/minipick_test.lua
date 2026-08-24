@@ -892,6 +892,27 @@ mock.is_enabled = false
 local res_gg3 = minipick_mod.handle_toggle_key("enable", "<C-j>")
 assert_eq(res_gg3, "<C-j>", "handle_toggle_key should pass through raw_char when denops returns 0")
 
+-- GG-4: denops#request returns table with numeric result
+vim.fn["denops#request"] = function()
+    return { result = 123, state = "input" }
+end
+local res_gg4 = skk_mod.call_skk_handle("handleKey", { expr = true }, "")
+assert_eq(res_gg4, "", "call_skk_handle should return empty string without crash when ret.result is numeric")
+
+-- GG-5: denops#request returns table with table result
+vim.fn["denops#request"] = function()
+    return { result = { nested = true } }
+end
+local res_gg5 = skk_mod.call_skk_handle("handleKey", { expr = true }, "")
+assert_eq(res_gg5, "", "call_skk_handle should return empty string without crash when ret.result is table")
+
+-- GG-6: denops#request returns table with vim.NIL result
+vim.fn["denops#request"] = function()
+    return { result = vim.NIL }
+end
+local res_gg6 = skk_mod.call_skk_handle("handleKey", { expr = true }, "")
+assert_eq(res_gg6, "", "call_skk_handle should return empty string without crash when ret.result is vim.NIL")
+
 vim.fn["denops#request"] = orig_denops_req
 
 -- Simulate MiniPickStop event

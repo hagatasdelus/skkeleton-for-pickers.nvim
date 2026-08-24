@@ -1,5 +1,7 @@
 local M = {}
 
+M.AUGROUP_NAME = "SkkeletonForPickers"
+
 -- Private session state
 local session = {
     prev_preedit = "",

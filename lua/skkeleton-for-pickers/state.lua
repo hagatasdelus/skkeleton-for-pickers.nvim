@@ -3,7 +3,6 @@ local M = {}
 -- Private session state
 local session = {
     prev_preedit = "",
-    is_routing_skk = false,
     orig_getcharstr = nil,
 }
 
@@ -16,14 +15,6 @@ function M.set_prev_preedit(val)
     session.prev_preedit = val or ""
 end
 
-function M.is_routing_skk()
-    return session.is_routing_skk
-end
-
-function M.set_routing_skk(val)
-    session.is_routing_skk = not not val
-end
-
 function M.get_orig_getcharstr()
     return session.orig_getcharstr
 end
@@ -34,7 +25,6 @@ end
 
 function M.stop_session()
     session.prev_preedit = ""
-    session.is_routing_skk = false
 end
 
 -- Buffer local state encapsulation (vim.b)

@@ -165,6 +165,15 @@ assert_eq(
     "getcharstr should be patched when mini_pick is enabled and active"
 )
 
+local state_mod = require("skkeleton-for-pickers.state")
+state_mod.set_prev_preedit("▽てすと")
+
+_G.MiniPick = {
+    is_picker_active = function()
+        return true
+    end,
+}
+
 picker_bypass.setup({
     pickers = {
         mini_pick = { enabled = false },
@@ -175,6 +184,12 @@ assert_eq(
     nil,
     "getcharstr patch should be restored when mini_pick is re-disabled"
 )
+assert_eq(
+    state_mod.get_prev_preedit(),
+    "",
+    "stop_session should reset prev_preedit when mini_pick is disabled on re-setup"
+)
+_G.MiniPick = nil
 
 -- Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers
 print("Running Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers...")

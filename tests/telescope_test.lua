@@ -259,8 +259,48 @@ vim.api.nvim_set_current_buf(dummy_other_buf)
 
 assert_eq(mock.disabled_count, 1, "Leaving TelescopePrompt buffer should call skkeleton#disable via BufLeave")
 
+-- Test 7: Prompt buffer WITHOUT CR mapping still registers BufLeave cleanup
+print("Running Test 7: Prompt buffer WITHOUT CR mapping still registers BufLeave cleanup...")
+local buf7 = vim.api.nvim_create_buf(false, true)
+vim.bo[buf7].filetype = "TelescopePrompt"
+vim.api.nvim_set_current_buf(buf7)
+reset_mock()
+mock.is_enabled = true
+
+-- Call setup_buffer WITHOUT any <CR> keymap
+buffer.setup_buffer()
+
+-- Leaving buf7 should still trigger BufLeave cleanup
+vim.api.nvim_set_current_buf(dummy_other_buf)
+assert_eq(mock.disabled_count, 1, "Leaving TelescopePrompt without CR map should still call skkeleton#disable")
+
+-- Test 8: Repeated buffer leave (drop once=true) disables skkeleton on second leave
+print("Running Test 8: Repeated buffer leave disables skkeleton on second leave...")
+local buf8 = vim.api.nvim_create_buf(false, true)
+vim.bo[buf8].filetype = "TelescopePrompt"
+vim.api.nvim_set_current_buf(buf8)
+reset_mock()
+mock.is_enabled = true
+
+vim.keymap.set("i", "<CR>", function() end, { buffer = buf8 })
+buffer.setup_buffer()
+
+-- First leave
+vim.api.nvim_set_current_buf(dummy_other_buf)
+assert_eq(mock.disabled_count, 1, "First leave should disable skkeleton")
+
+-- Re-enter buf8 and re-enable skkeleton
+vim.api.nvim_set_current_buf(buf8)
+reset_mock()
+mock.is_enabled = true
+buffer.setup_buffer() -- setup_buffer might return early because cr_wrapped is true
+
+-- Second leave
+vim.api.nvim_set_current_buf(dummy_other_buf)
+assert_eq(mock.disabled_count, 1, "Second leave should also disable skkeleton (no once=true)")
+
 -- Cleanup buffers
-local buffers_to_delete = { buf1, buf2, buf_rhs, buf_fallback, buf5, buf6, dummy_other_buf }
+local buffers_to_delete = { buf1, buf2, buf_rhs, buf_fallback, buf5, buf6, buf7, buf8, dummy_other_buf }
 for _, b in ipairs(buffers_to_delete) do
     if b and vim.api.nvim_buf_is_valid(b) then
         vim.api.nvim_buf_delete(b, { force = true })

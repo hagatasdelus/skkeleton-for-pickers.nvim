@@ -3,6 +3,7 @@ local M = {}
 local config = require("skkeleton-for-pickers.config")
 local buffer = require("skkeleton-for-pickers.buffer")
 local minipick = require("skkeleton-for-pickers.minipick")
+local state = require("skkeleton-for-pickers.state")
 
 M.default_config = config.default_config
 M.config = config.options
@@ -33,6 +34,9 @@ function M.setup(opts)
         local buf = vim.api.nvim_get_current_buf()
         if is_minipick_active and vim.bo[buf].filetype == "minipick" then
             pcall(vim.fn["skkeleton#disable"])
+        end
+        if is_minipick_active then
+            state.stop_session()
         end
         minipick.restore_patch()
     end

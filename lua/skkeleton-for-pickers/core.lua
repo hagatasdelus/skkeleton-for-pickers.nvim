@@ -174,7 +174,9 @@ function M.to_notation(key, notation_map)
     return key
 end
 
---- Create a new query array excluding conversion markers
+--- Create a new query array excluding conversion markers.
+--- Note: Skkeleton conversion markers are assumed to be single UTF-8 characters
+--- as configured in skkeleton (defaults: '▽' and '▼').
 ---@param query string[]
 ---@param marker_henkan string
 ---@param marker_henkan_select string
@@ -365,14 +367,10 @@ end
 
 --- Generate action plan for routing key to skkeleton
 ---@param routed_key string
----@param has_marker boolean
 ---@param termcodes table|nil
----@return { action: string, skk_key: string|nil }
-function M.get_skk_routing_plan(routed_key, has_marker, termcodes)
+---@return { action: string, skk_key: string }
+function M.get_skk_routing_plan(routed_key, termcodes)
     if routed_key == "\r" or routed_key == "\n" or routed_key == "\x1b" then
-        if not has_marker then
-            return { action = "disable_skk" }
-        end
         local nl_val = (termcodes and termcodes.nl) or "\n"
         local skk_key = (routed_key == "\x1b") and "\x07" or nl_val
         return { action = "handle_key", skk_key = skk_key }

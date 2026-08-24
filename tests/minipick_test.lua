@@ -846,6 +846,54 @@ assert_eq(q_ee[1], "▽", "process_skk_result(nil) should retain first char")
 assert_eq(q_ee[2], "か", "process_skk_result(nil) should retain second char")
 assert_eq(q_ee[3], "ん", "process_skk_result(nil) should retain third char")
 
+-- Case FF: Denops failure handling in handle_toggle_key
+reset_mock()
+mock.is_enabled = false
+local cleared_mappings_called = false
+local orig_clear = vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"]
+vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"] = function()
+    cleared_mappings_called = true
+end
+
+skk_mod.call_skk_handle = function()
+    return nil
+end
+
+local res_ff = minipick_mod.handle_toggle_key("enable", "\n")
+assert_eq(res_ff, "\n", "handle_toggle_key should return raw char when enable fails")
+assert_true(not cleared_mappings_called, "dangerously_clear_buffer_local_mappings must not be called when enable fails")
+
+skk_mod.call_skk_handle = orig_call_skk
+vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"] = orig_clear
+
+-- Case GG: call_skk_handle robustness against non-table returns and exceptions
+local orig_denops_req = vim.fn["denops#request"]
+
+-- GG-1: denops#request returns numeric 0 (e.g. killed deno process)
+vim.fn["denops#request"] = function()
+    return 0
+end
+local res_gg1 = skk_mod.call_skk_handle("enable", { expr = true }, "")
+assert_eq(res_gg1, nil, "call_skk_handle should return nil without error when denops#request returns number 0")
+
+-- GG-2: denops#request throws an error
+vim.fn["denops#request"] = function()
+    error("deno process died abruptly")
+end
+local res_gg2 = skk_mod.call_skk_handle("enable", { expr = true }, "")
+assert_eq(res_gg2, nil, "call_skk_handle should return nil without propagating error when denops#request throws")
+
+-- GG-3: handle_toggle_key with real call_skk_handle when denops returns 0
+vim.fn["denops#request"] = function()
+    return 0
+end
+reset_mock()
+mock.is_enabled = false
+local res_gg3 = minipick_mod.handle_toggle_key("enable", "<C-j>")
+assert_eq(res_gg3, "<C-j>", "handle_toggle_key should pass through raw_char when denops returns 0")
+
+vim.fn["denops#request"] = orig_denops_req
+
 -- Simulate MiniPickStop event
 vim.api.nvim_exec_autocmds("User", { pattern = "MiniPickStop" })
 

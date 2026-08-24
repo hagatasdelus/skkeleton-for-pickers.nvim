@@ -94,28 +94,17 @@ end
 
 -- Handle normal key routing to skkeleton
 function M.route_key_to_skk(char)
-    state.set_routing_skk(true)
-
     local query_str = get_current_picker_query_str()
     local routed_key = core.normalize_routed_key(char, TERMCODES)
-    local has_marker = skk.has_skkeleton_marker(query_str)
-    local plan = core.get_skk_routing_plan(routed_key, has_marker, TERMCODES)
-
-    if plan.action == "disable_skk" then
-        pcall(vim.fn["skkeleton#disable"])
-        state.set_routing_skk(false)
-        return char
-    end
+    local plan = core.get_skk_routing_plan(routed_key, TERMCODES)
 
     local result = skk.call_skk_handle("handleKey", { key = plan.skk_key or routed_key, expr = true }, query_str)
     if result == nil then
-        state.set_routing_skk(false)
         -- return raw char to passthrough on Denops failure
         return char
     end
 
     M.process_skk_result(result)
-    state.set_routing_skk(false)
     return IGNORE_CHAR
 end
 
@@ -193,11 +182,11 @@ function M.wrap_active_picker_opts()
 end
 
 -- Process the toggle keypress to enable/disable skkeleton
-function M.handle_toggle_key(action)
+function M.handle_toggle_key(action, raw_char)
     action = action or "toggle"
     local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
     if not ok_skk then
-        return IGNORE_CHAR
+        return raw_char or IGNORE_CHAR
     end
 
     local should_enable = false
@@ -210,11 +199,12 @@ function M.handle_toggle_key(action)
     end
 
     if should_enable and not skk_enabled then
-        state.set_routing_skk(true)
         local query_str = get_current_picker_query_str()
-        skk.call_skk_handle("enable", { expr = true }, query_str)
+        local res = skk.call_skk_handle("enable", { expr = true }, query_str)
+        if res == nil then
+            return raw_char or IGNORE_CHAR
+        end
         pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
-        state.set_routing_skk(false)
     elseif not should_enable and skk_enabled then
         pcall(vim.fn["skkeleton#disable"])
     end
@@ -235,7 +225,7 @@ function M.handle_picker_char(char)
         return char == item.raw
     end)
     if matched_item then
-        return M.handle_toggle_key(matched_item.action)
+        return M.handle_toggle_key(matched_item.action, char)
     end
 
     -- Re-evaluate skkeleton enablement state

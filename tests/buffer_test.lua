@@ -129,6 +129,12 @@ reset_mock()
 vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
 vim.keymap.set("n", "<C-j>", "a<Plug>(skkeleton-enable)", { noremap = true })
 
+local dummy_cb_toggle_called = 0
+local dummy_cb_toggle = function()
+    dummy_cb_toggle_called = dummy_cb_toggle_called + 1
+end
+vim.keymap.set("i", "<C-k>", dummy_cb_toggle, { desc = "skkeleton toggle" })
+
 picker.setup({
     pickers = {
         telescope = { enabled = true },
@@ -154,6 +160,7 @@ end)
 local maps_i = vim.api.nvim_buf_get_keymap(buf, "i")
 local maps_n = vim.api.nvim_buf_get_keymap(buf, "n")
 local found_toggle_i = false
+local found_callback_toggle_i = false
 local found_enable_n = false
 local found_cr = nil
 
@@ -162,6 +169,9 @@ for _, m in ipairs(maps_i) do
     if lhs == "<C-J>" then
         found_toggle_i = true
         assert_eq(m.rhs, "<Plug>(skkeleton-toggle)", "Derived Insert mode toggle key should map to plug")
+    elseif lhs == "<C-K>" then
+        found_callback_toggle_i = true
+        assert_true(type(m.callback) == "function", "Derived callback toggle key should preserve callback function")
     elseif lhs == "<CR>" then
         found_cr = m
     end
@@ -176,6 +186,7 @@ for _, m in ipairs(maps_n) do
 end
 
 assert_true(found_toggle_i, "Insert mode toggle keymap should be dynamically bound")
+assert_true(found_callback_toggle_i, "Insert mode callback toggle keymap should be dynamically bound")
 assert_true(found_enable_n, "Normal mode enable keymap should be dynamically bound")
 assert_true(found_cr ~= nil, "CR keymap should be created")
 
@@ -242,7 +253,6 @@ mock.is_enabled = true
 -- Re-apply our mapping since Case B may have removed it
 -- We need to manually re-apply since skkeleton-enable-post won't fire in test
 vim.b[buf].skkeleton_for_pickers_cr_wrapped = false
-vim.b[buf].skkeleton_for_pickers_setup = true
 
 -- Re-set the original CR mapping that would have been restored by skkeleton#disable
 vim.keymap.set("i", "<CR>", function()

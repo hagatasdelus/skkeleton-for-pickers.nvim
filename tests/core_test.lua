@@ -143,12 +143,17 @@ assert_eq(core.should_route_to_skk("a", false, dummy_termcodes), true, "should_r
 assert_eq(core.normalize_routed_key("<DEL_KEY>", dummy_termcodes), "\x08", "normalize_routed_key DEL termcode")
 assert_eq(core.normalize_routed_key("a", dummy_termcodes), "a", "normalize_routed_key normal")
 
-local plan_no_marker = core.get_skk_routing_plan("\r", false, dummy_termcodes)
-assert_eq(plan_no_marker.action, "disable_skk", "routing plan disable for CR without marker")
+local plan_cr = core.get_skk_routing_plan("\r", dummy_termcodes)
+assert_eq(plan_cr.action, "handle_key", "routing plan handle_key for CR")
+assert_eq(plan_cr.skk_key, "<NL_KEY>", "routing plan key uses injected termcodes.nl")
 
-local plan_marker = core.get_skk_routing_plan("\r", true, dummy_termcodes)
-assert_eq(plan_marker.action, "handle_key", "routing plan handle_key for CR with marker")
-assert_eq(plan_marker.skk_key, "<NL_KEY>", "routing plan key uses injected termcodes.nl")
+local plan_esc = core.get_skk_routing_plan("\x1b", dummy_termcodes)
+assert_eq(plan_esc.action, "handle_key", "routing plan handle_key for Esc")
+assert_eq(plan_esc.skk_key, "\x07", "routing plan key Esc maps to \\x07")
+
+local plan_char = core.get_skk_routing_plan("a", dummy_termcodes)
+assert_eq(plan_char.action, "handle_key", "routing plan handle_key for regular char")
+assert_eq(plan_char.skk_key, "a", "routing plan key regular char")
 
 -- Test 09-1: Enhanced parse_skk_action
 print("Running Test 09-1: Enhanced parse_skk_action...")

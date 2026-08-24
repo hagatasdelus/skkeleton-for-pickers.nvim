@@ -81,6 +81,21 @@ function M.setup_buffer()
         return plan.action
     end
 
+    -- Clear any existing BufLeave/BufDelete autocmds for this buffer to prevent duplicates on repeated setup
+    vim.api.nvim_clear_autocmds({
+        group = "SkkeletonForPickers",
+        buffer = buf,
+        event = { "BufLeave", "BufDelete" },
+    })
+
+    -- Disable skkeleton when leaving the picker buffer
+    vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
+        group = "SkkeletonForPickers",
+        buffer = buf,
+        callback = function()
+            pcall(vim.fn["skkeleton#disable"])
+        end,
+    })
     state.mark_skk_enabled(buf, true)
 
     -- Re-bind user's skkeleton keymaps (Insert and Normal mode) in prompt buffer if skkeleton is not currently active
@@ -108,16 +123,6 @@ function M.setup_buffer()
     state.save_original_cr(buf, map)
     M.apply_cr_map(buf)
     state.mark_cr_wrapped(buf, true)
-
-    -- Disable skkeleton when leaving the picker buffer
-    vim.api.nvim_create_autocmd({ "BufLeave", "BufDelete" }, {
-        group = "SkkeletonForPickers",
-        buffer = buf,
-        once = true,
-        callback = function()
-            pcall(vim.fn["skkeleton#disable"])
-        end,
-    })
 end
 
 return M

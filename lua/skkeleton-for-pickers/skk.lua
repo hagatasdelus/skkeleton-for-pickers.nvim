@@ -23,7 +23,7 @@ function M.get_skkeleton_keymaps(mode)
         end)
         :flatten(1)
         :map(function(map)
-            local action = core.parse_skk_action(map.rhs)
+            local action = core.parse_skk_action(map)
             if not action then
                 return nil
             end
@@ -31,7 +31,7 @@ function M.get_skkeleton_keymaps(mode)
             return {
                 lhs = map.lhs,
                 raw = vim.api.nvim_replace_termcodes(map.lhs, true, true, true),
-                rhs = map.rhs,
+                rhs = map.callback or map.rhs,
                 action = action,
                 mode = mode,
             }
@@ -87,7 +87,7 @@ function M.call_skk_handle(func, opts, current_text)
     }
 
     local ok_req, ret = pcall(vim.fn["denops#request"], "skkeleton", "handle", { func, normalized_opts, vim_status })
-    if not (ok_req and ret) then
+    if not (ok_req and type(ret) == "table") then
         return nil
     end
 

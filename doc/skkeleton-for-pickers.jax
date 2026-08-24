@@ -1,21 +1,21 @@
-*skkeleton-pickers.jax*	Fuzzy Finder でのシームレスな skkeleton 日本語入力
+*skkeleton-for-pickers.jax*	Fuzzy Finder でのシームレスな skkeleton 日本語入力
 
 Author: hagatasdelus
 License: MIT
 
 ==============================================================================
-目次							*skkeleton-pickers-contents*
+目次							*skkeleton-for-pickers-contents*
 
-はじめに						|skkeleton-pickers-introduction|
-必要要件						|skkeleton-pickers-requirements|
-インストール						|skkeleton-pickers-installation|
-設定							|skkeleton-pickers-configuration|
-補足・注意点						|skkeleton-pickers-notes|
+はじめに						|skkeleton-for-pickers-introduction|
+必要要件						|skkeleton-for-pickers-requirements|
+インストール						|skkeleton-for-pickers-installation|
+設定							|skkeleton-for-pickers-configuration|
+補足・注意点						|skkeleton-for-pickers-notes|
 
 ==============================================================================
-はじめに						*skkeleton-pickers-introduction*
+はじめに						*skkeleton-for-pickers-introduction*
 
-skkeleton-pickers.nvim は、Neovim の主要な Fuzzy Finder（ファジーファインダー）
+skkeleton-for-pickers.nvim は、Neovim の主要な Fuzzy Finder（ファジーファインダー）
 のプロンプトバッファ内で、skkeleton を用いたシームレスな日本語入力を可能にす
 るための Neovim プラグインです。
 
@@ -35,22 +35,22 @@ skkeleton-pickers.nvim は、Neovim の主要な Fuzzy Finder（ファジーフ�
 - Telescope および mini.pick をサポート。
 
 ==============================================================================
-必要要件						*skkeleton-pickers-requirements*
+必要要件						*skkeleton-for-pickers-requirements*
 
 - Neovim >= 0.10.0
 - vim-denops/denops.vim (https://github.com/vim-denops/denops.vim)
 - vim-skk/skkeleton (https://github.com/vim-skk/skkeleton)
 
 ==============================================================================
-インストール						*skkeleton-pickers-installation*
+インストール						*skkeleton-for-pickers-installation*
 
 lazy.nvim の場合: >lua
 
   {
-    "hagatasdelus/skkeleton-pickers.nvim",
+    "hagatasdelus/skkeleton-for-pickers.nvim",
     dependencies = { "vim-skk/skkeleton" },
     config = function()
-      require("skkeleton-pickers").setup({
+      require("skkeleton-for-pickers").setup({
         pickers = {
           telescope = { enabled = true },
           mini_pick = { enabled = true },
@@ -63,10 +63,10 @@ mini.deps の場合: >lua
 
   local MiniDeps = require('mini.deps')
   MiniDeps.add({
-    source = 'hagatasdelus/skkeleton-pickers.nvim',
+    source = 'hagatasdelus/skkeleton-for-pickers.nvim',
     depends = { 'vim-skk/skkeleton' },
   })
-  require('skkeleton-pickers').setup({
+  require('skkeleton-for-pickers').setup({
     pickers = {
       telescope = { enabled = true },
       mini_pick = { enabled = true },
@@ -75,14 +75,14 @@ mini.deps の場合: >lua
 <
 
 ==============================================================================
-設定							*skkeleton-pickers-configuration*
+設定							*skkeleton-for-pickers-configuration*
 
 注意: 各ピッカーはデフォルトで無効 (`enabled = false`) です。利用するには
 setup() にて明示的に有効にする必要があります。
 
 setup() にオプションを渡すことで挙動をカスタマイズできます: >lua
 
-  require("skkeleton-pickers").setup({
+  require("skkeleton-for-pickers").setup({
     pickers = {
       telescope = { enabled = true },
       mini_pick = { enabled = true },
@@ -91,7 +91,7 @@ setup() にオプションを渡すことで挙動をカスタマイズできま
 <
 
 ==============================================================================
-補足・注意点						*skkeleton-pickers-notes*
+補足・注意点						*skkeleton-for-pickers-notes*
 
 mini.pick でのエスケープキー (<Esc>) ハンドリングについて: ~
 mini.pick の統合において、変換中および入力中に <Esc> が押された場合、

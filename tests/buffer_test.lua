@@ -1,4 +1,3 @@
--- tests/buffer_test.lua
 package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
 local pass_count = 0
@@ -7,8 +6,18 @@ local fail_count = 0
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
         print(
-            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+            string.format(
+                "%sFAIL: expected '%s', got '%s'. Context: %s",
+                loc,
+                tostring(expected),
+                tostring(actual),
+                msg or ""
+            )
         )
     else
         pass_count = pass_count + 1
@@ -18,7 +27,11 @@ end
 local function assert_true(cond, msg)
     if not cond then
         fail_count = fail_count + 1
-        print(string.format("FAIL: expected true, got false. Context: %s", msg or ""))
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
+        print(string.format("%sFAIL: expected true, got false. Context: %s", loc, msg or ""))
     else
         pass_count = pass_count + 1
     end
@@ -105,7 +118,8 @@ local function reset_mock()
 end
 
 -- Load the plugin
-local picker = require("skkeleton-pickers")
+local picker = require("skkeleton-for-pickers")
+local buffer = require("skkeleton-for-pickers.buffer")
 
 -- Test 2: Buffer Setup and Keymaps
 print("Running Test 2: Buffer Setup and Keymaps...")
@@ -114,6 +128,12 @@ reset_mock()
 -- Set user skkeleton keymaps for testing derivation
 vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-toggle)", { noremap = true })
 vim.keymap.set("n", "<C-j>", "a<Plug>(skkeleton-enable)", { noremap = true })
+
+local dummy_cb_toggle_called = 0
+local dummy_cb_toggle = function()
+    dummy_cb_toggle_called = dummy_cb_toggle_called + 1
+end
+vim.keymap.set("i", "<C-k>", dummy_cb_toggle, { desc = "skkeleton toggle" })
 
 picker.setup({
     pickers = {
@@ -131,7 +151,7 @@ end, { buffer = buf })
 
 vim.bo[buf].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf)
-vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonPickers", buffer = buf })
+vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonForPickers", buffer = buf })
 
 vim.wait(20, function()
     return false
@@ -140,6 +160,7 @@ end)
 local maps_i = vim.api.nvim_buf_get_keymap(buf, "i")
 local maps_n = vim.api.nvim_buf_get_keymap(buf, "n")
 local found_toggle_i = false
+local found_callback_toggle_i = false
 local found_enable_n = false
 local found_cr = nil
 
@@ -148,6 +169,9 @@ for _, m in ipairs(maps_i) do
     if lhs == "<C-J>" then
         found_toggle_i = true
         assert_eq(m.rhs, "<Plug>(skkeleton-toggle)", "Derived Insert mode toggle key should map to plug")
+    elseif lhs == "<C-K>" then
+        found_callback_toggle_i = true
+        assert_true(type(m.callback) == "function", "Derived callback toggle key should preserve callback function")
     elseif lhs == "<CR>" then
         found_cr = m
     end
@@ -162,6 +186,7 @@ for _, m in ipairs(maps_n) do
 end
 
 assert_true(found_toggle_i, "Insert mode toggle keymap should be dynamically bound")
+assert_true(found_callback_toggle_i, "Insert mode callback toggle keymap should be dynamically bound")
 assert_true(found_enable_n, "Normal mode enable keymap should be dynamically bound")
 assert_true(found_cr ~= nil, "CR keymap should be created")
 
@@ -196,7 +221,7 @@ for _, m in ipairs(maps) do
     end
 end
 if not found_cr then
-    vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
+    vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonForPickers", buffer = buf })
     vim.wait(20, function()
         return false
     end)
@@ -218,18 +243,24 @@ assert_eq(mock.handle_calls[1].opts.key, "\n", "Should pass NL key")
 assert_eq(mock.disabled_count, 0, "Should NOT disable skkeleton when marker is present")
 assert_eq(original_cr_called, 0, "Original CR should NOT be called when marker is present")
 
--- Case C: Skkeleton enabled without marker
+-- Case C: Skkeleton enabled, line has NO marker — should disable skkeleton
+-- and feed <CR> to trigger the picker's file selection
 print("  Case C: Skkeleton enabled without marker")
 original_cr_called = 0
 reset_mock()
 mock.is_enabled = true
 
-vim.b[buf].skkeleton_pickers_cr_wrapped = false
-vim.b[buf].skkeleton_pickers_setup = true
+-- Re-apply our mapping since Case B may have removed it
+-- We need to manually re-apply since skkeleton-enable-post won't fire in test
+vim.b[buf].skkeleton_for_pickers_cr_wrapped = false
+
+-- Re-set the original CR mapping that would have been restored by skkeleton#disable
 vim.keymap.set("i", "<CR>", function()
     original_cr_called = original_cr_called + 1
 end, { buffer = buf })
-vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
+
+-- Now re-trigger setup to wrap it
+vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonForPickers", buffer = buf })
 vim.wait(20, function()
     return false
 end)
@@ -243,9 +274,12 @@ for _, m in ipairs(maps) do
     end
 end
 assert_true(found_cr ~= nil, "CR mapping must exist for Case C")
+
+-- Set buffer line without marker
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "かんじ" })
 cr_callback = found_cr.callback
 cr_callback()
+
 assert_eq(mock.disabled_count, 1, "Should disable skkeleton when no marker")
 
 -- Case D: Skkeleton enabled with custom markers
@@ -256,11 +290,12 @@ mock.is_enabled = true
 mock.config.markerHenkan = "["
 mock.config.markerHenkanSelect = "]"
 
-vim.b[buf].skkeleton_pickers_cr_wrapped = false
+-- Re-apply mapping
+vim.b[buf].skkeleton_for_pickers_cr_wrapped = false
 vim.keymap.set("i", "<CR>", function()
     original_cr_called = original_cr_called + 1
 end, { buffer = buf })
-vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonPickers", buffer = buf })
+vim.api.nvim_exec_autocmds("InsertEnter", { group = "SkkeletonForPickers", buffer = buf })
 vim.wait(20, function()
     return false
 end)
@@ -285,6 +320,7 @@ assert_eq(mock.disabled_count, 0, "Should NOT disable skkeleton when custom mark
 assert_eq(original_cr_called, 0, "Original CR should NOT be called when custom marker is present")
 
 -- Test 5: skkeleton-enable-post re-applies CR mapping
+
 print("Running Test 5: skkeleton-enable-post re-applies CR mapping...")
 reset_mock()
 local buf3 = vim.api.nvim_create_buf(false, true)
@@ -299,7 +335,7 @@ picker.setup({
 reset_mock()
 vim.bo[buf3].filetype = "TelescopePrompt"
 vim.api.nvim_set_current_buf(buf3)
-vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonPickers", buffer = buf3 })
+vim.api.nvim_exec_autocmds("FileType", { group = "SkkeletonForPickers", buffer = buf3 })
 
 maps = vim.api.nvim_buf_get_keymap(buf3, "i")
 local has_cr_map = false
@@ -309,6 +345,7 @@ for _, m in ipairs(maps) do
     end
 end
 assert_true(has_cr_map, "CR mapping should be wrapped initially")
+assert_true(vim.b[buf3].skkeleton_for_pickers_cr_wrapped == true, "Buffer should be marked as wrapped")
 
 vim.keymap.set("i", "<CR>", "<Cmd>echo 'skkeleton'<CR>", { buffer = buf3, noremap = true, nowait = true })
 maps = vim.api.nvim_buf_get_keymap(buf3, "i")
@@ -343,7 +380,50 @@ vim.bo[buf_normal].filetype = "markdown"
 vim.api.nvim_set_current_buf(buf_normal)
 
 vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-enable-post" })
-assert_eq(mock.cleared_mappings_count, 0, "skkeleton-enable-post in normal buffer must NOT clear skkeleton buffer mappings")
+assert_eq(
+    mock.cleared_mappings_count,
+    0,
+    "skkeleton-enable-post in normal buffer must NOT clear skkeleton buffer mappings"
+)
+
+-- Test 7: Re-setup clear past BufLeave/BufDelete autocmds without duplication
+print("Running Test 7: Re-setup autocmd de-duplication...")
+reset_mock()
+
+local buf_ac = vim.api.nvim_create_buf(false, true)
+vim.bo[buf_ac].filetype = "TelescopePrompt"
+vim.api.nvim_set_current_buf(buf_ac)
+vim.keymap.set("i", "<CR>", function() end, { buffer = buf_ac })
+
+picker.setup({
+    pickers = { telescope = { enabled = true } },
+})
+buffer.setup_buffer()
+
+-- Simulate re-setup / config reload
+local buf_ac2 = vim.api.nvim_create_buf(false, true)
+vim.bo[buf_ac2].filetype = "TelescopePrompt"
+vim.api.nvim_set_current_buf(buf_ac2)
+vim.keymap.set("i", "<CR>", function() end, { buffer = buf_ac2 })
+
+picker.setup({
+    pickers = { telescope = { enabled = true } },
+})
+buffer.setup_buffer()
+
+local autocmds_buf1 = vim.api.nvim_get_autocmds({ buffer = buf_ac, event = { "BufLeave", "BufDelete" } })
+assert_eq(#autocmds_buf1, 0, "BufLeave/BufDelete autocmd on old buffer should be cleared after re-setup")
+
+local autocmds_buf2 = vim.api.nvim_get_autocmds({ buffer = buf_ac2, event = { "BufLeave", "BufDelete" } })
+assert_eq(#autocmds_buf2, 2, "BufLeave/BufDelete autocmd on new buffer should be registered after re-setup")
+
+-- Cleanup test buffers
+local buffers_to_delete = { buf, buf3, buf_normal, buf_ac, buf_ac2 }
+for _, b in ipairs(buffers_to_delete) do
+    if b and vim.api.nvim_buf_is_valid(b) then
+        vim.api.nvim_buf_delete(b, { force = true })
+    end
+end
 
 print(string.format("\nbuffer_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then

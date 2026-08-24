@@ -1,8 +1,9 @@
 local M = {}
 
-local config = require("skkeleton-pickers.config")
-local buffer = require("skkeleton-pickers.buffer")
-local minipick = require("skkeleton-pickers.minipick")
+local config = require("skkeleton-for-pickers.config")
+local buffer = require("skkeleton-for-pickers.buffer")
+local minipick = require("skkeleton-for-pickers.minipick")
+local state = require("skkeleton-for-pickers.state")
 
 M.default_config = config.default_config
 M.config = config.options
@@ -24,13 +25,18 @@ function M.setup(opts)
     end
 
     -- Always clear/re-create augroup on setup
-    local group = vim.api.nvim_create_augroup("SkkeletonPickers", { clear = true })
+    local group = vim.api.nvim_create_augroup(state.AUGROUP_NAME, { clear = true })
 
     if not is_minipick_enabled then
-        local is_minipick_active = _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" and _G.MiniPick.is_picker_active()
+        local is_minipick_active = _G.MiniPick
+            and type(_G.MiniPick.is_picker_active) == "function"
+            and _G.MiniPick.is_picker_active()
         local buf = vim.api.nvim_get_current_buf()
         if is_minipick_active and vim.bo[buf].filetype == "minipick" then
             pcall(vim.fn["skkeleton#disable"])
+        end
+        if is_minipick_active then
+            state.stop_session()
         end
         minipick.restore_patch()
     end
@@ -38,7 +44,12 @@ function M.setup(opts)
     if #buffer.active_fts > 0 then
         vim.api.nvim_create_autocmd({ "FileType", "BufEnter", "WinEnter", "InsertEnter" }, {
             group = group,
-            callback = buffer.setup_buffer,
+            callback = function()
+                local action = buffer.setup_buffer()
+                if action == "patch_minipick" and is_minipick_enabled then
+                    minipick.apply_patch()
+                end
+            end,
         })
 
         -- When skkeleton enables, it overwrites all buffer-local mappings
@@ -48,14 +59,7 @@ function M.setup(opts)
             pattern = "skkeleton-enable-post",
             group = group,
             callback = function()
-                local buf = vim.api.nvim_get_current_buf()
-                if vim.b[buf].skkeleton_pickers_cr_wrapped then
-                    buffer.apply_cr_map(buf)
-                end
-                local is_minipick_active = _G.MiniPick and type(_G.MiniPick.is_picker_active) == "function" and _G.MiniPick.is_picker_active()
-                if is_minipick_enabled and is_minipick_active and vim.bo[buf].filetype == "minipick" then
-                    pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
-                end
+                buffer.handle_skkeleton_enable_post(is_minipick_enabled)
             end,
         })
     end
@@ -71,12 +75,7 @@ function M.setup(opts)
         vim.api.nvim_create_autocmd("User", {
             pattern = "MiniPickStop",
             group = group,
-            callback = function()
-                minipick.picker_initialized = false
-                minipick.prev_preedit = ""
-                pcall(vim.fn["skkeleton#disable"])
-                minipick.restore_patch()
-            end,
+            callback = minipick.on_picker_stop,
         })
     end
 end

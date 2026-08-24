@@ -1,4 +1,3 @@
--- tests/config_test.lua
 package.path = vim.fn.getcwd() .. "/lua/?.lua;" .. vim.fn.getcwd() .. "/lua/?/init.lua;" .. package.path
 
 local pass_count = 0
@@ -7,8 +6,18 @@ local fail_count = 0
 local function assert_eq(actual, expected, msg)
     if actual ~= expected then
         fail_count = fail_count + 1
+        local info = debug.getinfo(2, "Sl")
+        local loc = (info and info.short_src and info.currentline)
+                and string.format("[%s:%d] ", info.short_src, info.currentline)
+            or ""
         print(
-            string.format("FAIL: expected '%s', got '%s'. Context: %s", tostring(expected), tostring(actual), msg or "")
+            string.format(
+                "%sFAIL: expected '%s', got '%s'. Context: %s",
+                loc,
+                tostring(expected),
+                tostring(actual),
+                msg or ""
+            )
         )
     else
         pass_count = pass_count + 1
@@ -90,7 +99,7 @@ local function reset_mock()
 end
 
 -- Load the plugin
-local picker = require("skkeleton-pickers")
+local picker = require("skkeleton-for-pickers")
 
 -- Test 1: Config merging
 print("Running Test 1: Config merging...")
@@ -104,16 +113,16 @@ assert_eq(picker.config.pickers.mini_pick.enabled, false, "mini_pick should defa
 
 -- Test 2: Bypass setup for disabled pickers
 print("Running Test 2: Bypass setup for disabled pickers...")
-package.loaded["skkeleton-pickers"] = nil
-package.loaded["skkeleton-pickers.config"] = nil
-package.loaded["skkeleton-pickers.buffer"] = nil
-package.loaded["skkeleton-pickers.skk"] = nil
-package.loaded["skkeleton-pickers.minipick"] = nil
-_G.skkeleton_pickers_minipick_patched = nil
+package.loaded["skkeleton-for-pickers"] = nil
+package.loaded["skkeleton-for-pickers.config"] = nil
+package.loaded["skkeleton-for-pickers.buffer"] = nil
+package.loaded["skkeleton-for-pickers.skk"] = nil
+package.loaded["skkeleton-for-pickers.minipick"] = nil
+_G.skkeleton_for_pickers_minipick_patched = nil
 
 local orig_getcharstr = vim.fn.getcharstr
 
-local picker_bypass = require("skkeleton-pickers")
+local picker_bypass = require("skkeleton-for-pickers")
 picker_bypass.setup({
     pickers = {
         telescope = { enabled = true },
@@ -126,15 +135,19 @@ assert_eq(picker_bypass.config.pickers.mini_pick.enabled, false, "mini_pick shou
 
 local has_telescope = false
 local has_minipick = false
-local buffer_mod = require("skkeleton-pickers.buffer")
+local buffer_mod = require("skkeleton-for-pickers.buffer")
 for _, ft in ipairs(buffer_mod.active_fts) do
-    if ft == "TelescopePrompt" then has_telescope = true end
-    if ft == "minipick" then has_minipick = true end
+    if ft == "TelescopePrompt" then
+        has_telescope = true
+    end
+    if ft == "minipick" then
+        has_minipick = true
+    end
 end
 assert_eq(has_telescope, true, "active_fts should contain TelescopePrompt")
 assert_eq(has_minipick, false, "active_fts should NOT contain minipick")
 
-assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr should not be patched when mini_pick is disabled")
+assert_eq(_G.skkeleton_for_pickers_minipick_patched, nil, "getcharstr should not be patched when mini_pick is disabled")
 assert_eq(vim.fn.getcharstr, orig_getcharstr, "getcharstr function pointer should remain unchanged")
 
 -- Test 3: Disabling mini_pick on re-setup restores patch
@@ -144,16 +157,39 @@ picker_bypass.setup({
         mini_pick = { enabled = true },
     },
 })
-local minipick_mod = require("skkeleton-pickers.minipick")
+local minipick_mod = require("skkeleton-for-pickers.minipick")
 minipick_mod.apply_patch()
-assert_eq(_G.skkeleton_pickers_minipick_patched, true, "getcharstr should be patched when mini_pick is enabled and active")
+assert_eq(
+    _G.skkeleton_for_pickers_minipick_patched,
+    true,
+    "getcharstr should be patched when mini_pick is enabled and active"
+)
+
+local state_mod = require("skkeleton-for-pickers.state")
+state_mod.set_prev_preedit("▽てすと")
+
+_G.MiniPick = {
+    is_picker_active = function()
+        return true
+    end,
+}
 
 picker_bypass.setup({
     pickers = {
         mini_pick = { enabled = false },
     },
 })
-assert_eq(_G.skkeleton_pickers_minipick_patched, nil, "getcharstr patch should be restored when mini_pick is re-disabled")
+assert_eq(
+    _G.skkeleton_for_pickers_minipick_patched,
+    nil,
+    "getcharstr patch should be restored when mini_pick is re-disabled"
+)
+assert_eq(
+    state_mod.get_prev_preedit(),
+    "",
+    "stop_session should reset prev_preedit when mini_pick is disabled on re-setup"
+)
+_G.MiniPick = nil
 
 -- Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers
 print("Running Test 4: Setup with mini_pick disabled does NOT disable skkeleton in normal buffers...")
@@ -170,8 +206,16 @@ picker_bypass.setup({
     },
 })
 
-assert_eq(mock.is_enabled, true, "skkeleton should remain enabled in normal buffer when running setup with mini_pick disabled")
+assert_eq(
+    mock.is_enabled,
+    true,
+    "skkeleton should remain enabled in normal buffer when running setup with mini_pick disabled"
+)
 assert_eq(mock.disabled_count, 0, "skkeleton#disable should NOT be called in normal buffer during setup")
+
+if normal_buf and vim.api.nvim_buf_is_valid(normal_buf) then
+    vim.api.nvim_buf_delete(normal_buf, { force = true })
+end
 
 print(string.format("\nconfig_test finished: %d passed, %d failed", pass_count, fail_count))
 if fail_count > 0 then
@@ -179,4 +223,3 @@ if fail_count > 0 then
 else
     os.exit(0)
 end
-

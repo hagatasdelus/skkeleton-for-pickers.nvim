@@ -1,20 +1,20 @@
-*skkeleton-pickers.txt*	Seamless skkeleton integration for fuzzy finders
+*skkeleton-for-pickers.txt*	Seamless skkeleton integration for fuzzy finders
 
 Author: hagatasdelus License: MIT
 
 ==============================================================================
-CONTENTS						*skkeleton-pickers-contents*
+CONTENTS						*skkeleton-for-pickers-contents*
 
-Introduction						|skkeleton-pickers-introduction|
-Requirements						|skkeleton-pickers-requirements|
-Installation						|skkeleton-pickers-installation|
-Configuration						|skkeleton-pickers-configuration|
-Notes							|skkeleton-pickers-notes|
+Introduction						|skkeleton-for-pickers-introduction|
+Requirements						|skkeleton-for-pickers-requirements|
+Installation						|skkeleton-for-pickers-installation|
+Configuration						|skkeleton-for-pickers-configuration|
+Notes							|skkeleton-for-pickers-notes|
 
 ==============================================================================
-INTRODUCTION						*skkeleton-pickers-introduction*
+INTRODUCTION						*skkeleton-for-pickers-introduction*
 
-skkeleton-pickers.nvim is a Neovim plugin that provides seamless integration
+skkeleton-for-pickers.nvim is a Neovim plugin that provides seamless integration
 between the skkeleton Japanese input method and popular fuzzy finders, enabling
 smooth Japanese text input within prompt buffers.
 
@@ -32,22 +32,22 @@ Features: ~
 - Out-of-the-box support for Telescope and mini.pick.
 
 ==============================================================================
-REQUIREMENTS						*skkeleton-pickers-requirements*
+REQUIREMENTS						*skkeleton-for-pickers-requirements*
 
 - Neovim >= 0.10.0
 - vim-denops/denops.vim (https://github.com/vim-denops/denops.vim)
 - vim-skk/skkeleton (https://github.com/vim-skk/skkeleton)
 
 ==============================================================================
-INSTALLATION						*skkeleton-pickers-installation*
+INSTALLATION						*skkeleton-for-pickers-installation*
 
 Using lazy.nvim: >lua
 
   {
-    "hagatasdelus/skkeleton-pickers.nvim",
+    "hagatasdelus/skkeleton-for-pickers.nvim",
     dependencies = { "vim-skk/skkeleton" },
     config = function()
-      require("skkeleton-pickers").setup({
+      require("skkeleton-for-pickers").setup({
         pickers = {
           telescope = { enabled = true },
           mini_pick = { enabled = true },
@@ -60,10 +60,10 @@ Using mini.deps: >lua
 
   local MiniDeps = require('mini.deps')
   MiniDeps.add({
-    source = 'hagatasdelus/skkeleton-pickers.nvim',
+    source = 'hagatasdelus/skkeleton-for-pickers.nvim',
     depends = { 'vim-skk/skkeleton' },
   })
-  require('skkeleton-pickers').setup({
+  require('skkeleton-for-pickers').setup({
     pickers = {
       telescope = { enabled = true },
       mini_pick = { enabled = true },
@@ -72,14 +72,14 @@ Using mini.deps: >lua
 <
 
 ==============================================================================
-CONFIGURATION						*skkeleton-pickers-configuration*
+CONFIGURATION						*skkeleton-for-pickers-configuration*
 
 Note: All pickers are disabled by default (`enabled = false`). You must
 explicitly enable each picker in setup().
 
 Customize options inside setup(): >lua
 
-  require("skkeleton-pickers").setup({
+  require("skkeleton-for-pickers").setup({
     pickers = {
       telescope = { enabled = true },
       mini_pick = { enabled = true },
@@ -88,7 +88,7 @@ Customize options inside setup(): >lua
 <
 
 ==============================================================================
-NOTES							*skkeleton-pickers-notes*
+NOTES							*skkeleton-for-pickers-notes*
 
 Escape key (<Esc>) handling in mini.pick: ~
 In mini.pick integration, pressing <Esc> during henkan or input state internal-

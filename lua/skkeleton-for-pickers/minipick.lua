@@ -1,0 +1,292 @@
+---@diagnostic disable: duplicate-set-field
+local M = {}
+
+local skk = require("skkeleton-for-pickers.skk")
+local core = require("skkeleton-for-pickers.core")
+local state = require("skkeleton-for-pickers.state")
+
+-- Cache key termcodes including <NL> for accurate skkeleton key routing
+local TERMCODES = {
+    del = vim.api.nvim_replace_termcodes("<Del>", true, true, true),
+    bs = vim.api.nvim_replace_termcodes("<BS>", true, true, true),
+    bspace = vim.api.nvim_replace_termcodes("<Bspace>", true, true, true),
+    nl = vim.api.nvim_replace_termcodes("<NL>", true, true, true),
+}
+local IGNORE_CHAR = "\x1c"
+
+-- Check if mini.pick is active and the current window is the prompt window
+local function is_picker_win_active()
+    if not (_G.MiniPick and type(_G.MiniPick.is_picker_active) == "function") then
+        return false
+    end
+    if not _G.MiniPick.is_picker_active() then
+        return false
+    end
+    if type(_G.MiniPick.get_picker_state) == "function" then
+        local picker_state = _G.MiniPick.get_picker_state()
+        if picker_state and picker_state.windows and picker_state.windows.main then
+            return vim.api.nvim_get_current_win() == picker_state.windows.main
+        end
+    end
+    return true
+end
+
+-- Helper: Retrieve current preedit string from skkeleton
+local function get_current_preedit()
+    local cur_preedit = ""
+    local ok_preedit, preedit_res = pcall(vim.fn["denops#request"], "skkeleton", "getPreEdit", {})
+    if ok_preedit and type(preedit_res) == "string" then
+        cur_preedit = preedit_res
+    end
+    return cur_preedit
+end
+
+-- Process the skkeleton handleKey result and update mini.pick query
+function M.process_skk_result(result)
+    if result == nil then
+        return
+    end
+
+    if result == " \8" then
+        return
+    end
+
+    if not is_picker_win_active() then
+        return
+    end
+
+    local query = MiniPick.get_picker_query()
+    if not query then
+        return
+    end
+
+    local marker_henkan, marker_henkan_select = skk.get_skk_markers()
+    local cur_preedit = get_current_preedit()
+
+    local new_query, new_prev = core.calculate_new_query({
+        query = query,
+        prev_preedit = state.get_prev_preedit(),
+        result = result,
+        cur_preedit = cur_preedit,
+        marker_henkan = marker_henkan,
+        marker_henkan_select = marker_henkan_select,
+    })
+
+    state.set_prev_preedit(new_prev)
+    MiniPick.set_picker_query(new_query)
+end
+
+local function get_current_picker_query_str()
+    if _G.MiniPick and type(_G.MiniPick.get_picker_query) == "function" then
+        local q = MiniPick.get_picker_query()
+        if type(q) == "table" then
+            return table.concat(q)
+        end
+    end
+    return ""
+end
+
+function M.should_route_to_skk(char)
+    local query_str = get_current_picker_query_str()
+    local has_marker = skk.has_skkeleton_marker(query_str)
+    return core.should_route_to_skk(char, has_marker, TERMCODES)
+end
+
+-- Handle normal key routing to skkeleton
+function M.route_key_to_skk(char)
+    local query_str = get_current_picker_query_str()
+    local routed_key = core.normalize_routed_key(char, TERMCODES)
+    local plan = core.get_skk_routing_plan(routed_key, TERMCODES)
+
+    local result = skk.call_skk_handle("handleKey", { key = plan.skk_key or routed_key, expr = true }, query_str)
+    if result == nil then
+        -- return raw char to passthrough on Denops failure
+        return char
+    end
+
+    M.process_skk_result(result)
+    return IGNORE_CHAR
+end
+
+-- Safely check if skkeleton is currently enabled
+function M.is_skk_enabled()
+    local ok_s, skk_e = pcall(vim.fn["skkeleton#is_enabled"])
+    return ok_s and skk_e
+end
+
+-- Side-effect layer helper: Gather markers from Neovim/skk state and pass to core
+local function clean_query_with_markers(query)
+    local m1, m2 = skk.get_skk_markers()
+    return core.clean_query_markers(query, m1, m2)
+end
+
+-- Wrap default_match to support synchronous matching when routing skkeleton keys
+function M.wrap_default_match()
+    if _G.MiniPick and not _G.MiniPick.skkeleton_for_pickers_wrapped then
+        _G.MiniPick.skkeleton_for_pickers_wrapped = true
+        local orig_default_match = _G.MiniPick.default_match
+        _G.MiniPick.default_match = function(stritems, inds, query, opts)
+            if M.is_skk_enabled() then
+                opts = vim.tbl_extend("force", {}, opts or {}, { sync = true })
+                query = clean_query_with_markers(query)
+            end
+            return orig_default_match(stritems, inds, query, opts)
+        end
+    end
+end
+
+-- Wrap the active picker's options dynamically (Lazy-load safe)
+function M.wrap_active_picker_opts()
+    if not is_picker_win_active() then
+        return
+    end
+
+    if type(_G.MiniPick.get_picker_opts) ~= "function" or type(_G.MiniPick.set_picker_opts) ~= "function" then
+        return
+    end
+
+    local opts = _G.MiniPick.get_picker_opts()
+    if not opts then
+        return
+    end
+
+    local modified = false
+    opts.mappings = opts.mappings or {}
+    if not opts.mappings.skkeleton_for_pickers_ignore then
+        opts.mappings.skkeleton_for_pickers_ignore = {
+            char = IGNORE_CHAR,
+            func = function() end,
+        }
+        modified = true
+    end
+
+    if
+        opts.source
+        and type(opts.source.match) == "function"
+        and not opts.source.skkeleton_for_pickers_match_wrapped
+    then
+        local orig_match = opts.source.match
+        opts.source.match = function(stritems, inds, query, opts_match)
+            if M.is_skk_enabled() then
+                query = clean_query_with_markers(query)
+            end
+            return orig_match(stritems, inds, query, opts_match)
+        end
+        opts.source.skkeleton_for_pickers_match_wrapped = true
+        modified = true
+    end
+
+    if modified then
+        _G.MiniPick.set_picker_opts(opts)
+    end
+end
+
+-- Process the toggle keypress to enable/disable skkeleton
+function M.handle_toggle_key(action, raw_char)
+    action = action or "toggle"
+    local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
+    if not ok_skk then
+        return raw_char or IGNORE_CHAR
+    end
+
+    local should_enable = false
+    if action == "enable" then
+        should_enable = true
+    elseif action == "disable" then
+        should_enable = false
+    else
+        should_enable = not skk_enabled
+    end
+
+    if should_enable and not skk_enabled then
+        local query_str = get_current_picker_query_str()
+        local res = skk.call_skk_handle("enable", { expr = true }, query_str)
+        if res == nil then
+            return raw_char or IGNORE_CHAR
+        end
+        pcall(vim.fn["skkeleton#dangerously_clear_buffer_local_mappings"])
+    elseif not should_enable and skk_enabled then
+        pcall(vim.fn["skkeleton#disable"])
+    end
+    return IGNORE_CHAR
+end
+
+-- Process keypress logic for mini.pick and route to skkeleton if needed
+function M.handle_picker_char(char)
+    -- Wrap active picker's options dynamically
+    M.wrap_active_picker_opts()
+
+    -- Wrap default_match to support synchronous matching when routing skkeleton keys
+    M.wrap_default_match()
+
+    -- Check if user pressed any of their derived skkeleton keymaps
+    local keymaps = skk.get_skkeleton_keymaps("i")
+    local matched_item = vim.iter(keymaps):find(function(item)
+        return char == item.raw
+    end)
+    if matched_item then
+        return M.handle_toggle_key(matched_item.action, char)
+    end
+
+    -- Re-evaluate skkeleton enablement state
+    local ok_skk, skk_enabled = pcall(vim.fn["skkeleton#is_enabled"])
+
+    if not (ok_skk and skk_enabled and char ~= "" and char ~= nil) then
+        return char
+    end
+
+    if M.should_route_to_skk(char) then
+        return M.route_key_to_skk(char)
+    end
+
+    if char == "\x1b" or char == "\r" or char == "\n" then
+        pcall(vim.fn["skkeleton#disable"])
+    end
+    return char
+end
+
+function M.patched_getcharstr(orig_fn, ...)
+    local char = orig_fn(...)
+
+    -- Normalize backspace key
+    if char == "\x7f" then
+        char = "\x08"
+    end
+
+    if is_picker_win_active() then
+        return M.handle_picker_char(char)
+    end
+
+    return char
+end
+
+function M.apply_patch()
+    if state.get_orig_getcharstr() then
+        return
+    end
+
+    local orig_fn = vim.fn.getcharstr
+    state.set_orig_getcharstr(orig_fn)
+    vim.fn.getcharstr = function(...)
+        return M.patched_getcharstr(orig_fn, ...)
+    end
+
+    _G.skkeleton_for_pickers_minipick_patched = true
+end
+
+function M.on_picker_stop()
+    pcall(vim.fn["skkeleton#disable"])
+    M.restore_patch()
+    state.stop_session()
+end
+
+function M.restore_patch()
+    local orig_fn = state.get_orig_getcharstr()
+    if orig_fn then
+        vim.fn.getcharstr = orig_fn
+        state.set_orig_getcharstr(nil)
+    end
+    _G.skkeleton_for_pickers_minipick_patched = nil
+end
+
+return M
